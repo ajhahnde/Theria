@@ -26,6 +26,13 @@ protocol version.
 
 ### Added
 
+- Networked multiplayer over a listen-server: one player hosts the authoritative
+  match and a second joins over the network, each driving their own hero while the
+  host simulates and broadcasts the world every tick. Peers exchange a protocol
+  version on connect and a mismatch is refused; an empty player slot is filled by
+  a bot. Launch with `-- --host` or `-- --join <address>`; the default remains a
+  single-machine game. This activates the netcode protocol version as a
+  compatibility axis.
 - Combat heroes: the player's hero and the bot now auto-attack the nearest enemy
   in range, so a hero can clear creep waves, pressure towers, duel the enemy hero,
   and push a lane toward the nexus. Heroes spawn at their base fountain.

@@ -33,8 +33,8 @@ and a jungle to break each other's nexus.
 
 The first milestone is a **walking skeleton**: one player-controlled hero and
 one bot moving on the 3v3 arena under a server-authoritative, fixed-timestep
-simulation. Online play, items, and the meta layer come later — the skeleton
-exists to prove the authority model first.
+simulation. With that authority model proven, networked play over a
+listen-server now runs on top of it; items and the meta layer come later.
 
 ## Architecture
 
@@ -47,10 +47,13 @@ core is driven by:
   resulting state;
 - the bot (`src/bot`), which derives its command from the world state;
 - the headless tests (`test/`), which replay scripted input and assert the
-  outcome.
+  outcome;
+- the networked drivers (`src/net`), where a host simulates and broadcasts the
+  world and a client sends its input up and renders the snapshots it receives.
 
-Because authority lives entirely in the simulation, networked play can be added
-later as another driver without rewriting gameplay.
+Because authority lives entirely in the simulation, networked play is just
+another driver — a listen-server — added without rewriting gameplay. The host is
+the sole authority; a client never simulates, it only renders what it is sent.
 
 ## Layout
 
@@ -58,8 +61,9 @@ later as another driver without rewriting gameplay.
 | :------------- | :---------------------------------------------------- |
 | `src/sim`    | The authoritative simulation core and its data types. |
 | `src/bot`    | Bot input derived from the world state.               |
+| `src/net`    | Listen-server transport and the client/server wire protocol. |
 | `src/client` | Local input sampling and rendering.                   |
-| `test/unit`  | Headless tests of the simulation.                     |
+| `test/unit`  | Headless tests of the simulation and the wire protocol. |
 | `scenes`     | Godot scenes.                                         |
 
 ## Running
@@ -71,6 +75,18 @@ godot --path .
 ```
 
 Move the hero with **WASD** or the **arrow keys**; the bot walks toward it.
+
+### Multiplayer
+
+Pass arguments after `--` to choose a role; with neither, the game runs on a
+single machine. One peer hosts and a second joins it:
+
+```sh
+godot --path . -- --host             # host the match (you are team 0)
+godot --path . -- --join 127.0.0.1   # join a host at an address (you are team 1)
+```
+
+The host is authoritative and fills any empty player slot with a bot.
 
 ## Testing
 
