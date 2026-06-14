@@ -155,8 +155,8 @@ func test_a_combat_run_replays_identically() -> void:
 func _run_combat() -> Array:
 	var sim := SimCore.new()
 	sim.spawn_structures()
-	var hero := sim.add_entity(0, MapData.spawn_for_team(0), 320.0, 600)
-	var bot := sim.add_entity(1, MapData.spawn_for_team(1), 300.0, 600)
+	var hero := sim.add_hero(0, MapData.spawn_for_team(0), 320.0)
+	var bot := sim.add_hero(1, MapData.spawn_for_team(1), 300.0)
 	var march := InputCommand.new()
 	march.move_dir = Vector2(1.0, -1.0)  # walk both units toward the enemy base
 	for _i in 600:
@@ -261,6 +261,24 @@ func test_creep_waves_are_mirror_fair() -> void:
 			_creep_at(sim.state, 1, -creep.position),
 			"every team-0 creep has a team-1 creep mirrored through the origin",
 		)
+
+
+# --- Heroes: the player/bot combat unit -------------------------------------
+
+
+func test_a_hero_strikes_an_enemy_in_range() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var hero := sim.add_hero(0, Vector2.ZERO, 320.0)
+	var enemy := sim.add_entity(1, Vector2(SimCore.HERO_RANGE - 10.0, 0.0), 0.0, 600)
+	sim.step({})
+	assert_eq(
+		sim.state.get_entity(enemy).hp,
+		600 - SimCore.HERO_DAMAGE,
+		"a hero auto-attacks an enemy in range through the shared combat primitive",
+	)
+	# A hero out-hits a creep: its damage exceeds a creep's, so it clears waves.
+	assert_true(SimCore.HERO_DAMAGE > SimCore.CREEP_DAMAGE, "a hero out-damages a creep")
 
 
 func _count_creeps(state: SimState) -> int:

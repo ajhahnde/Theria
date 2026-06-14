@@ -12,6 +12,19 @@ func test_nexuses_are_point_symmetric_and_in_bounds() -> void:
 	assert_eq(MapData.clamp_to_bounds(n1), n1, "nexus 1 must sit inside the bounds")
 
 
+func test_team_fountains_sit_at_base_and_mirror_through_the_origin() -> void:
+	var f0 := MapData.spawn_for_team(0)
+	var f1 := MapData.spawn_for_team(1)
+	assert_eq(f1, -f0, "team 1's fountain must be team 0's fountain negated")
+	assert_eq(MapData.clamp_to_bounds(f0), f0, "the fountain must sit inside the bounds")
+	# It is at base: closer to its own nexus than to the map centre.
+	var nexus := MapData.nexus_for_team(0)
+	assert_true(
+		f0.distance_to(nexus) < f0.length(),
+		"a fountain spawns at its base, not out near the centre",
+	)
+
+
 func test_lane_path_orients_from_each_team_nexus_to_the_enemy_nexus() -> void:
 	for lane in MapData.lane_count():
 		var team0 := MapData.lane_path(lane, 0)

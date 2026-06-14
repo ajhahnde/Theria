@@ -20,16 +20,9 @@ const NEXUS_POSITIONS: Array[Vector2] = [
 	Vector2(1600.0, -1600.0),
 ]
 
-## Hero spawn position for each team, indexed by team id.
-##
-## These are the v0.1 walking-skeleton spawns near the centre, kept stable so the
-## skeleton demo is undisturbed by this layer. Aligning spawns to a fountain at
-## each base is a later slice (it lands with the client camera that frames the
-## full map); the base anchor for that work is `NEXUS_POSITIONS`.
-const TEAM_SPAWNS: Array[Vector2] = [
-	Vector2(-360.0, -200.0),
-	Vector2(360.0, 200.0),
-]
+## How far in front of the nexus a team's heroes spawn — a fountain pulled toward
+## the map centre so a hero starts at its base without sitting on the nexus.
+const FOUNTAIN_PULLBACK := 300.0
 
 ## Top corridor: out of team 0's base, up the left edge, across the top.
 const LANE_TOP: Array[Vector2] = [
@@ -76,8 +69,12 @@ const TOWER_SLOTS_TEAM0: Array[Vector2] = [
 ]
 
 
+## A team's hero spawn: its base fountain, set just in front of the nexus toward
+## the map centre. Derived from `NEXUS_POSITIONS`, so the two teams' spawns mirror
+## through the origin like the rest of the map.
 static func spawn_for_team(team: int) -> Vector2:
-	return TEAM_SPAWNS[team % TEAM_SPAWNS.size()]
+	var nexus := nexus_for_team(team)
+	return nexus - nexus.normalized() * FOUNTAIN_PULLBACK
 
 
 static func nexus_for_team(team: int) -> Vector2:

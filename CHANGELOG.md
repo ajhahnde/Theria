@@ -26,6 +26,9 @@ protocol version.
 
 ### Added
 
+- Combat heroes: the player's hero and the bot now auto-attack the nearest enemy
+  in range, so a hero can clear creep waves, pressure towers, duel the enemy hero,
+  and push a lane toward the nexus. Heroes spawn at their base fountain.
 - Lane creeps: each team spawns periodic creep waves that march their lane
   toward the enemy base, stop to fight whatever they meet, siege towers, and can
   drive an undefended nexus to destruction — making the win condition reachable

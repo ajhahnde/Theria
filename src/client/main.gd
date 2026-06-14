@@ -10,8 +10,6 @@ extends Node2D
 
 const HERO_SPEED := 320.0
 const BOT_SPEED := 300.0
-const HERO_HP := 600
-const BOT_HP := 600
 const HERO_TEAM := 0
 const BOT_TEAM := 1
 
@@ -53,8 +51,8 @@ var _bot_id: int = 0
 
 func _ready() -> void:
 	_sim.spawn_structures()
-	_hero_id = _sim.add_entity(HERO_TEAM, MapData.spawn_for_team(HERO_TEAM), HERO_SPEED, HERO_HP)
-	_bot_id = _sim.add_entity(BOT_TEAM, MapData.spawn_for_team(BOT_TEAM), BOT_SPEED, BOT_HP)
+	_hero_id = _sim.add_hero(HERO_TEAM, MapData.spawn_for_team(HERO_TEAM), HERO_SPEED)
+	_bot_id = _sim.add_hero(BOT_TEAM, MapData.spawn_for_team(BOT_TEAM), BOT_SPEED)
 	queue_redraw()
 
 

@@ -40,6 +40,14 @@ const CREEP_SPAWN_SPACING := 80.0
 ## switches to the next one — large enough to round a corner without stalling.
 const WAYPOINT_ARRIVE_RADIUS := 40.0
 
+## Hero tuning. A hero out-hits a creep and out-ranges one, so a player can clear
+## a wave, pressure a tower, and duel the enemy hero — but a tower still out-ranges
+## and out-hits a lone hero, so diving one undefended is punished.
+const HERO_HP := 600
+const HERO_DAMAGE := 60
+const HERO_RANGE := 250.0
+const HERO_COOLDOWN_TICKS := 36
+
 var state: SimState = SimState.new()
 
 ## Whether `step` spawns creep waves on its own clock. On for live play and the
@@ -89,6 +97,19 @@ func spawn_structures() -> void:
 		for slot in MapData.tower_positions(team):
 			add_structure(team, slot, TOWER_HP, TOWER_DAMAGE, TOWER_RANGE, TOWER_COOLDOWN_TICKS)
 		add_structure(team, MapData.nexus_for_team(team), NEXUS_HP, 0, 0.0, 0, true)
+
+
+## Creates a hero — a player- or bot-driven mobile unit that fights with the
+## shared combat primitive (it auto-strikes the nearest enemy in range) — and
+## returns its id. `move_speed` is set by the driver; combat is fixed tuning.
+func add_hero(team: int, position: Vector2, move_speed: float) -> int:
+	var entity := SimEntity.new(_next_id, team, position, move_speed)
+	entity.max_hp = HERO_HP
+	entity.hp = HERO_HP
+	entity.attack_damage = HERO_DAMAGE
+	entity.attack_range = HERO_RANGE
+	entity.attack_cooldown_ticks = HERO_COOLDOWN_TICKS
+	return _register(entity)
 
 
 ## Creates a lane creep at `position` and returns its id. The creep marches
