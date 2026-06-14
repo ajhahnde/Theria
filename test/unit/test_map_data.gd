@@ -102,6 +102,48 @@ func test_every_tower_sits_on_a_lane_and_inside_the_bounds() -> void:
 			assert_true(on_a_lane, "every tower must sit on a lane corridor")
 
 
+func test_squad_spawn_of_one_falls_back_to_the_fountain() -> void:
+	for team in MapData.NEXUS_POSITIONS.size():
+		assert_eq(
+			MapData.squad_spawn(team, 0, 1),
+			MapData.spawn_for_team(team),
+			"a squad of one spawns on the bare fountain",
+		)
+
+
+func test_squad_spawn_fans_a_team_into_distinct_in_bounds_seats() -> void:
+	var count := 3
+	for team in MapData.NEXUS_POSITIONS.size():
+		var seen: Array[Vector2] = []
+		for i in count:
+			var seat := MapData.squad_spawn(team, i, count)
+			assert_eq(MapData.clamp_to_bounds(seat), seat, "every squad seat sits inside the bounds")
+			assert_false(seen.has(seat), "squadmates spawn on distinct points, not stacked")
+			seen.append(seat)
+
+
+func test_squad_spawn_is_point_symmetric_between_teams() -> void:
+	var count := 3
+	for i in count:
+		assert_eq(
+			MapData.squad_spawn(1, i, count),
+			-MapData.squad_spawn(0, i, count),
+			"team 1's squad seat must be team 0's negated, so neither side has an edge",
+		)
+
+
+func test_squad_spawn_fan_is_centred_on_the_fountain() -> void:
+	# The fan is symmetric about the fountain, so the seats average back to it.
+	var count := 3
+	var sum := Vector2.ZERO
+	for i in count:
+		sum += MapData.squad_spawn(0, i, count)
+	var centre := sum / float(count)
+	assert_almost_eq(
+		centre, MapData.spawn_for_team(0), Vector2(0.01, 0.01), "the squad fan centres on the fountain"
+	)
+
+
 ## True when `point` lies on one of the polyline's segments (within a small
 ## tolerance): the segment endpoints span it and it is collinear with them.
 func _point_on_polyline(point: Vector2, path: PackedVector2Array) -> bool:

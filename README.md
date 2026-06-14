@@ -36,7 +36,9 @@ one bot moving on the 3v3 arena under a server-authoritative, fixed-timestep
 simulation. With that authority model proven, networked play over a
 listen-server, the hero ability layer, and the first roster of heroes — the
 **Solane**, savanna big-cat shifters (lion, cheetah, hyena) — now run on top of
-it; the opposing Volk, multi-hero teams, and the art direction come next.
+it. A practice match fields the full Solane squad per team — the player drives
+one hero, bots fill the rest — so all three kits are on the field at once; the
+opposing Volk, multi-hero teams over the wire, and the art direction come next.
 
 ## Architecture
 
@@ -83,9 +85,12 @@ godot --path .
 ```
 
 A connect screen opens: choose **Practice** for a single-machine match, **Host** to
-start a listen-server, or type an address and **Join** one. Both sides field the
-Solane lion today. Move the hero with **WASD** or the **arrow keys**; the bot
-walks toward it. Cast its abilities with
+start a listen-server, or type an address and **Join** one. Practice fields the full
+Solane squad on each team — you drive one hero (the lion by default, or pass
+`--hero cheetah`/`--hero hyena` on the command line), bots drive the rest. A hosted
+or joined match is still a one-hero-per-team duel on the lion until multi-hero play
+reaches the wire. Move the hero with **WASD** or the **arrow keys**; the bots
+walk toward the nearest enemy. Cast its abilities with
 **1–4**, aimed at the mouse cursor — the hero shifts between a human and an animal
 form (shown by the ring around it, white or amber), each form a different set of
 abilities drawing on its own resource (the bar under the health bar). Abilities are
@@ -101,7 +106,8 @@ a role, since a menu cannot be driven without a display:
 ```sh
 godot --path . -- --host             # host the match (you are team 0)
 godot --path . -- --join 127.0.0.1   # join a host at an address (you are team 1)
-godot --path . -- --local            # a single-machine match, no menu
+godot --path . -- --local            # a single-machine practice match, no menu
+godot --path . -- --local --hero cheetah   # practice driving a different Solane hero
 ```
 
 The host is authoritative and fills any empty player slot with a bot. The joining

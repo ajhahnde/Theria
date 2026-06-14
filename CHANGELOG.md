@@ -35,14 +35,19 @@ protocol version.
 
 ### Added
 
+- A practice match now fields the full **Solane** squad on each team — one hero per
+  kit (Lion, Cheetah, Hyena) — so all three are on the field at once. The player drives
+  one (the Lion by default, or `--hero cheetah`/`--hero hyena`) and bots drive the rest.
+  A hosted or joined match stays a one-hero-per-team duel until multi-hero play reaches
+  the wire.
 - The first roster of distinct heroes — the **Solane**, a Volk of savanna big-cat
   shifters: a **Lion** frontline bruiser (short-range pokes, a heavy melee strike, and
   the deepest self-sustain), a **Cheetah** burst skirmisher (long-range pokes and a
   fast, repeatable single-target shred), and a **Hyena** zone controller (the widest
   ground areas for attrition). Each carries its own human and animal kit, drawn from the
   shared ability primitives but set apart by its targeting mix, tuning, and resource
-  economy. The current match equips the Lion for both sides; the Cheetah and Hyena are
-  authored and reachable once per-team hero selection lands.
+  economy. A practice match fields all three (see the squad entry above); a hosted or
+  joined match equips the Lion for both sides until multi-hero play reaches the wire.
 - Ability controls: the player now casts the hero's abilities with the **1–4** keys,
   aimed at the mouse cursor, and shifts the hero between its human and animal form to
   wield each form's distinct set. The hero shows its current form (a ring around it)

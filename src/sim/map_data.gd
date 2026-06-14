@@ -24,6 +24,10 @@ const NEXUS_POSITIONS: Array[Vector2] = [
 ## the map centre so a hero starts at its base without sitting on the nexus.
 const FOUNTAIN_PULLBACK := 300.0
 
+## Lateral gap between squadmates fanned across a base fountain, so a full team
+## spawns side by side instead of stacked on one point.
+const SQUAD_SPACING := 150.0
+
 ## Top corridor: out of team 0's base, up the left edge, across the top.
 const LANE_TOP: Array[Vector2] = [
 	Vector2(-1600.0, 1600.0),
@@ -79,6 +83,22 @@ static func spawn_for_team(team: int) -> Vector2:
 
 static func nexus_for_team(team: int) -> Vector2:
 	return NEXUS_POSITIONS[team % NEXUS_POSITIONS.size()]
+
+
+## A squadmate's spawn within its team's roster of `count`, fanned laterally
+## across the base fountain so the team starts side by side rather than stacked.
+## `index` runs 0..count-1; the fan is centred on the fountain and laid out along
+## the axis perpendicular to the base→centre direction. Mirror-fair like the rest
+## of the map: team 1's squad spawns are team 0's negated, because the fountain,
+## the inward direction, and the lateral axis all negate between teams.
+static func squad_spawn(team: int, index: int, count: int) -> Vector2:
+	var fountain := spawn_for_team(team)
+	if count <= 1:
+		return fountain
+	var inward := -nexus_for_team(team).normalized()  # base toward the map centre
+	var lateral := Vector2(-inward.y, inward.x)  # perpendicular to the inward axis
+	var offset := float(index) - float(count - 1) * 0.5
+	return clamp_to_bounds(fountain + lateral * (offset * SQUAD_SPACING))
 
 
 ## The tower slots for `team`: team 0's stored slots, negated for team 1 so the

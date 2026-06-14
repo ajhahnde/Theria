@@ -5,8 +5,9 @@ extends Node2D
 ## a headless launch with no flag defaults to LOCAL, so the automated smokes need no
 ## menu and stay flag-driven:
 ##
-##   LOCAL  — owns the authoritative SimCore and drives both heroes (player + bot),
-##            exactly the single-machine walking skeleton.
+##   LOCAL  — owns the authoritative SimCore and fields a full Solane squad per
+##            team: the player drives one hero (picked with `--hero`), every other
+##            seat is bot-driven. The single-machine practice match.
 ##   HOST   — the listen-server: owns the authoritative SimCore, drives team 0 from
 ##            local input, hands team 1 to a remote client when one connects (a bot
 ##            until then), and broadcasts a snapshot every tick.
@@ -71,11 +72,17 @@ const CREEP_HP_BAR_OFFSET := Vector2(-35.0, -55.0)
 const HP_BAR_BG := Color(0.0, 0.0, 0.0, 0.6)
 const HP_BAR_FG := Color(0.4, 0.85, 0.4)
 
-## The kit every seated hero is equipped with for v0.1 (see AbilityData). Both teams
-## mirror-pick the same Solane hero today; per-team hero selection arrives with the
-## multi-hero (3v3) slice, when the other authored Solane kits ("cheetah", "hyena")
-## become reachable in-game.
-const HERO_KIT := "lion"
+## The Solane roster each team fields in a LOCAL practice match, one hero per kit
+## (see AbilityData). The player drives one of them — picked with `--hero`, default
+## the first — and the rest are bot-driven allies and opponents, so all three
+## authored kits are reachable in-game. HOST/CLIENT still seat the one-per-team duel
+## (DUEL_KIT below): the wire identifies a hero by its team, so a networked squad
+## waits on the protocol step that gives each client a controlled-entity id.
+const SOLANE_ROSTER: Array[String] = ["lion", "cheetah", "hyena"]
+
+## The kit both heroes mirror in a HOST/CLIENT duel — the one-per-team walking
+## skeleton the netcode is built around until the multi-hero wire step lands.
+const DUEL_KIT := "lion"
 
 ## Ability bar keys, one per slot (0..3). Movement owns WASD/arrows, so the four
 ## abilities sit on the number row rather than QWER. A held key recasts the slot as
@@ -118,6 +125,14 @@ var _sim: SimCore = null
 var _bot := BotController.new()
 var _hero_id: int = 0
 var _bot_id: int = 0
+
+## LOCAL: the kit the player drives, from `--hero` (a Solane roster name); falls
+## back to the roster's first if unset or unrecognised. Ignored by HOST/CLIENT,
+## which seat the duel.
+var _player_hero := SOLANE_ROSTER[0]
+## LOCAL: every bot-driven hero this match — the player's two squadmates and the
+## three opponents — each stepped from its own BotController decision.
+var _bot_ids: Array[int] = []
 
 var _net: NetSession = null
 ## HOST: the peer id controlling team 1, or 0 while the slot is bot-filled.
@@ -182,6 +197,10 @@ func _configure_from_cmdline() -> void:
 		elif arg == "--local":
 			_mode = Mode.LOCAL
 			_explicit_mode = true
+		elif arg == "--hero":
+			if i + 1 < args.size() and not args[i + 1].begins_with("--"):
+				_player_hero = args[i + 1]
+				i += 1
 		elif arg == "--netsim":
 			if i + 1 < args.size() and not args[i + 1].begins_with("--"):
 				_netsim_params = _parse_netsim(args[i + 1])
@@ -269,19 +288,64 @@ func _close_menu_and_enter() -> void:
 	_enter_match()
 
 
+## Practice: both teams field the full Solane squad, one hero per roster kit. The
+## player drives the seat picked by `--hero`; the other five are bot-driven, so all
+## three authored kits are on the field at once.
 func _start_local() -> void:
-	_sim = SimCore.new()
-	_sim.spawn_structures()
+	_sim = _new_world()
+	_seat_squad(HERO_TEAM, HERO_SPEED, _player_slot())
+	_seat_squad(BOT_TEAM, BOT_SPEED, -1)
+
+
+## Seats one Solane hero per roster kit for `team`, each fanned across the base
+## fountain and equipped with its kit. The seat at `player_slot` becomes the
+## player's hero (`_hero_id`); every other seat is bot-driven (appended to
+## `_bot_ids`). A `player_slot` of -1 leaves the whole team bot-driven.
+func _seat_squad(team: int, speed: float, player_slot: int) -> void:
+	for i in SOLANE_ROSTER.size():
+		var id := _sim.add_hero(team, MapData.squad_spawn(team, i, SOLANE_ROSTER.size()), speed)
+		_sim.equip_kit(id, SOLANE_ROSTER[i])
+		if i == player_slot:
+			_hero_id = id
+		else:
+			_bot_ids.append(id)
+
+
+## The roster index the player drives, resolved from `--hero`. An unset or
+## unrecognised name falls back to the first kit (with a warning), so a typo starts
+## a valid match instead of crashing.
+func _player_slot() -> int:
+	var slot := SOLANE_ROSTER.find(_player_hero)
+	if slot < 0:
+		push_warning("unknown --hero %s; defaulting to %s" % [_player_hero, SOLANE_ROSTER[0]])
+		return 0
+	return slot
+
+
+## The HOST/CLIENT walking skeleton: exactly one hero per team, both mirroring the
+## duel kit. The wire identifies a hero by its team, so this one-per-team seating is
+## what the netcode — prediction, interpolation, snapshot identity — is built
+## around; the LOCAL squad stays off the wire until that protocol step lands.
+func _seat_duel() -> void:
+	_sim = _new_world()
 	_hero_id = _sim.add_hero(HERO_TEAM, MapData.spawn_for_team(HERO_TEAM), HERO_SPEED)
 	_bot_id = _sim.add_hero(BOT_TEAM, MapData.spawn_for_team(BOT_TEAM), BOT_SPEED)
-	# Both heroes carry the kit so the match starts mirror-fair; the bot does not yet
-	# cast (its controller drives movement only), but it shows its form and resource.
-	_sim.equip_kit(_hero_id, HERO_KIT)
-	_sim.equip_kit(_bot_id, HERO_KIT)
+	# Both heroes carry the kit so the match starts mirror-fair; the bot drives
+	# movement only (no casts yet) but shows its form and resource.
+	_sim.equip_kit(_hero_id, DUEL_KIT)
+	_sim.equip_kit(_bot_id, DUEL_KIT)
+
+
+## A fresh authoritative world with its structures spawned, shared by both the
+## LOCAL squad and the HOST/CLIENT duel seating.
+func _new_world() -> SimCore:
+	var sim := SimCore.new()
+	sim.spawn_structures()
+	return sim
 
 
 func _start_host() -> void:
-	_start_local()  # the authoritative world; team 1 is bot-filled until a client takes it
+	_seat_duel()  # the authoritative world; team 1 is bot-filled until a client takes it
 	_net = _make_session()
 	var err := _net.start_host()
 	if err != OK:
@@ -321,7 +385,10 @@ func _make_session() -> NetSession:
 
 
 func _tick_local() -> void:
-	_sim.step({_hero_id: _sample_player_input(), _bot_id: _bot.decide(_sim.state, _bot_id)})
+	var inputs := {_hero_id: _sample_player_input()}
+	for id in _bot_ids:
+		inputs[id] = _bot.decide(_sim.state, id)
+	_sim.step(inputs)
 
 
 func _tick_host() -> void:
