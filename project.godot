@@ -1,0 +1,25 @@
+; Engine configuration file.
+;
+; This file is the engine pin and the version mirror: `config/version` tracks
+; the canonical VERSION file, and the "4.6" feature string pins the Godot major
+; line the project is built against. Physics is pinned to the simulation's
+; 60 Hz tick so one physics frame equals one authoritative tick.
+
+config_version=5
+
+[application]
+
+config/name="Ashmere"
+config/version="0.1.0"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.6")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[physics]
+
+common/physics_ticks_per_second=60

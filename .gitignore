@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Private development workspace
+ajhahnde/
+
+# Local env / editor
+.env
+.vscode/
+
+# Godot editor + import cache (regenerated on open/import; not source)
+.godot/
+
+# Build / export artifacts
+build/
+dist/
+export_presets.cfg

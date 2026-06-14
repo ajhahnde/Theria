@@ -1,0 +1,9 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Placeholder brand glyph: an ember 'A' on an ash field. Swap for the
+       rendered wordmark glyph once the brand art is finalised. -->
+  <rect width="128" height="128" rx="28" fill="#1d2025"/>
+  <g fill="none" stroke="#fb923c" stroke-width="11" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M40 98 L64 34 L88 98"/>
+    <path d="M50 74 L78 74"/>
+  </g>
+</svg>

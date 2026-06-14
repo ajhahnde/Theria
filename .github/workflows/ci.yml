@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: gdlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install gdtoolkit
+        run: pip install "gdtoolkit==4.*"
+      - name: Lint
+        run: gdlint src test
+
+  test:
+    name: GUT (headless)
+    runs-on: ubuntu-latest
+    env:
+      GODOT_VERSION: "4.6.3"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Godot ${{ env.GODOT_VERSION }} (headless)
+        run: |
+          base="https://github.com/godotengine/godot-builds/releases/download"
+          file="Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          wget -q "${base}/${GODOT_VERSION}-stable/${file}.zip" -O godot.zip
+          unzip -q godot.zip
+          mv "${file}" godot
+          chmod +x godot
+      - name: Import project
+        run: ./godot --headless --import
+      - name: Run tests
+        run: ./godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://test -ginclude_subdirs -gexit
