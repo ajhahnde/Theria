@@ -153,14 +153,23 @@ func _register(entity: SimEntity) -> int:
 func _step_movement(inputs: Dictionary) -> void:
 	for id in state.entities:
 		var entity: SimEntity = state.entities[id]
-		var command: InputCommand = inputs.get(id, null)
-		var move_dir := Vector2.ZERO
-		if command != null:
-			move_dir = command.move_dir
-		if move_dir.length() > 1.0:
-			move_dir = move_dir.normalized()
-		entity.position += move_dir * entity.move_speed * TICK_DELTA
-		entity.position = MapData.clamp_to_bounds(entity.position)
+		apply_movement(entity, inputs.get(id, null))
+
+
+## Advances one entity by a single tick of movement intent: the pure movement
+## sub-step, with the diagonal-speed clamp and the bounds clamp. A `null` command
+## holds the entity still. The authoritative `_step_movement` runs it over every
+## entity; the client's prediction/replay runs it over its own hero alone — so the
+## server and a predicting client move a unit by byte-identical math, which is what
+## lets client-side reconciliation land exactly on the authoritative position.
+static func apply_movement(entity: SimEntity, command: InputCommand) -> void:
+	var move_dir := Vector2.ZERO
+	if command != null:
+		move_dir = command.move_dir
+	if move_dir.length() > 1.0:
+		move_dir = move_dir.normalized()
+	entity.position += move_dir * entity.move_speed * TICK_DELTA
+	entity.position = MapData.clamp_to_bounds(entity.position)
 
 
 ## On a wave tick, spawns one creep wave per team per lane. Driven off

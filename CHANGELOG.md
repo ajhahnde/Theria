@@ -33,6 +33,13 @@ protocol version.
   a bot. Launch with `-- --host` or `-- --join <address>`; the default remains a
   single-machine game. This activates the netcode protocol version as a
   compatibility axis.
+- Client-side prediction and reconciliation: a joined player's hero now responds
+  to their input immediately rather than after a network round trip. The client
+  predicts its own hero locally and, on every authoritative snapshot, rolls back
+  to the server's truth and replays the inputs the server has not yet applied — so
+  the prediction stays exactly on the authoritative path and self-corrects. Remote
+  units are still drawn straight from the snapshot. The netcode protocol version
+  advances to 2 (inputs now carry a sequence number and snapshots an acknowledgement).
 - Combat heroes: the player's hero and the bot now auto-attack the nearest enemy
   in range, so a hero can clear creep waves, pressure towers, duel the enemy hero,
   and push a lane toward the nexus. Heroes spawn at their base fountain.

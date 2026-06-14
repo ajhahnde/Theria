@@ -8,12 +8,17 @@ extends RefCounted
 ## here — separate from the socket layer in NetSession — is what lets the round
 ## trip be unit-tested headlessly, exactly like the simulation core.
 ##
-## The server is authoritative: a client only ever *renders* a decoded snapshot,
-## it never trusts its own copy. PROTOCOL_VERSION is the netcode compatibility
-## axis — peers exchange it on connect and a mismatch is refused, so an old client
-## cannot desync against a newer server. Bump it on any wire-shape change here.
+## The server is authoritative, but a client predicts its own hero locally and
+## reconciles against each snapshot. The wire carries two sequence markers for
+## that loop: every input is stamped with a client sequence number, and every
+## snapshot echoes back the last input sequence the server has applied (its `ack`),
+## so the client knows which of its pending inputs to replay.
+##
+## PROTOCOL_VERSION is the netcode compatibility axis — peers exchange it on
+## connect and a mismatch is refused, so an old client cannot desync against a
+## newer server. Bump it on any wire-shape change here.
 
-const PROTOCOL_VERSION := 1
+const PROTOCOL_VERSION := 2
 
 ## Bit positions for the packed entity-flags field (slot 11 of an entity row).
 const _FLAG_STRUCTURE := 1
@@ -21,26 +26,38 @@ const _FLAG_NEXUS := 2
 const _FLAG_CREEP := 4
 
 
-## Encodes one tick of intent for a single entity. Only the move direction is
-## carried today; richer intent (abilities) extends this row without a reshape.
-static func encode_input(command: InputCommand) -> Array:
-	return [command.move_dir.x, command.move_dir.y]
+## Encodes one tick of intent for a single entity, stamped with the client's
+## monotonic input sequence number so the server can acknowledge it and the client
+## can match the ack back to a pending input. Only the move direction is carried as
+## intent today; richer intent (abilities) extends this row without a reshape.
+static func encode_input(seq: int, command: InputCommand) -> Array:
+	return [seq, command.move_dir.x, command.move_dir.y]
+
+
+## The sequence number stamped on an encoded input, read without rebuilding the
+## command — the server stores it as the per-peer ack.
+static func decode_input_seq(data: Array) -> int:
+	return data[0]
 
 
 static func decode_input(data: Array) -> InputCommand:
 	var command := InputCommand.new()
-	command.move_dir = Vector2(data[0], data[1])
+	command.move_dir = Vector2(data[1], data[2])
 	return command
 
 
 ## Encodes the full authoritative world into a snapshot: the tick, the winner,
-## and every entity as a fixed-order row. Insertion order is preserved so the
-## decoded state iterates identically to the server's — deterministic rendering.
-static func encode_snapshot(state: SimState) -> Dictionary:
+## `ack` (the last client input sequence the server has applied — `-1` when no
+## remote input has been processed), and every entity as a fixed-order row.
+## Insertion order is preserved so the decoded state iterates identically to the
+## server's — deterministic rendering. The client reads `ack` to prune and replay
+## its pending inputs; `decode_snapshot` ignores it (it is a transport marker, not
+## world state), so it is read straight off the raw dict.
+static func encode_snapshot(state: SimState, ack: int = -1) -> Dictionary:
 	var rows: Array = []
 	for id in state.entities:
 		rows.append(_encode_entity(state.entities[id]))
-	return {"tick": state.tick, "winner": state.winner, "entities": rows}
+	return {"tick": state.tick, "winner": state.winner, "ack": ack, "entities": rows}
 
 
 ## Rebuilds a SimState from a snapshot. The result is a render target, not a

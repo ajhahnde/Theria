@@ -53,7 +53,10 @@ core is driven by:
 
 Because authority lives entirely in the simulation, networked play is just
 another driver — a listen-server — added without rewriting gameplay. The host is
-the sole authority; a client never simulates, it only renders what it is sent.
+the sole authority. A client never owns authority, but it predicts its own hero
+locally so input feels instant, reconciling against every snapshot: it rolls back
+to the server's state and replays the inputs the server has not yet applied, using
+the same movement code the server runs. Remote units are drawn from the snapshot.
 
 ## Layout
 
@@ -86,7 +89,8 @@ godot --path . -- --host             # host the match (you are team 0)
 godot --path . -- --join 127.0.0.1   # join a host at an address (you are team 1)
 ```
 
-The host is authoritative and fills any empty player slot with a bot.
+The host is authoritative and fills any empty player slot with a bot. The joining
+player's hero is predicted locally, so it responds without waiting on the host.
 
 ## Testing
 

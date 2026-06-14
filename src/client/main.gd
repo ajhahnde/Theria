@@ -8,12 +8,15 @@ extends Node2D
 ##   HOST   — the listen-server: owns the authoritative SimCore, drives team 0 from
 ##            local input, hands team 1 to a remote client when one connects (a bot
 ##            until then), and broadcasts a snapshot every tick.
-##   CLIENT — owns no simulation: it samples local input and sends it up, and draws
-##            whatever authoritative snapshot the server last sent down.
+##   CLIENT — owns no authority: it samples local input, sends it up, and draws the
+##            server's snapshots — but predicts its own hero locally from that input
+##            so the hero responds without a round-trip, reconciling against every
+##            snapshot. Remote entities are drawn straight from the snapshot.
 ##
 ## All authority stays in SimCore; the transport lives in NetSession; the wire
-## shaping lives in NetProtocol. This node only samples input, routes it, and
-## draws the resulting state — the same `_draw` serves every mode.
+## shaping lives in NetProtocol. This node samples input, routes it, predicts the
+## client's own hero, and draws the resulting state — the same `_draw` serves every
+## mode.
 
 enum Mode { LOCAL, HOST, CLIENT }
 
@@ -69,8 +72,17 @@ var _net: NetSession = null
 var _team1_peer: int = 0
 ## CLIENT: set once the server has accepted our handshake.
 var _joined: bool = false
-## CLIENT: the latest authoritative world decoded from a snapshot, or null.
+## CLIENT: the team the server assigned us; identifies our hero in a snapshot.
+var _my_team: int = BOT_TEAM
+## CLIENT: the predicted world to draw — the latest authoritative snapshot with
+## our own hero advanced by the inputs the server has not yet acknowledged.
 var _client_state: SimState = null
+## CLIENT: monotonic input sequence number, stamped on each input we send so the
+## server can acknowledge it and we can match the ack back to a pending input.
+var _input_seq: int = 0
+## CLIENT: inputs sent but not yet acknowledged, oldest first, each `{seq, input}`.
+## Replayed onto every snapshot to predict our hero; pruned as acks arrive.
+var _pending_inputs: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -161,19 +173,57 @@ func _tick_local() -> void:
 
 func _tick_host() -> void:
 	var team1_command: InputCommand
+	var ack := -1
 	if _team1_peer != 0:
 		var remote := _net.input_for(_team1_peer)
 		team1_command = remote if remote != null else InputCommand.new()
+		ack = _net.input_seq_for(_team1_peer)
 	else:
 		team1_command = _bot.decide(_sim.state, _bot_id)
 	_sim.step({_hero_id: _sample_player_input(), _bot_id: team1_command})
-	_net.broadcast_snapshot(_sim.state)
+	_net.broadcast_snapshot(_sim.state, ack)
 
 
+## Samples local input, sends it up stamped with a sequence number, buffers it as
+## pending, then redraws the predicted world. Prediction makes the local hero
+## respond immediately instead of waiting a round-trip for the server to echo it.
 func _tick_client() -> void:
 	if _joined:
-		_net.send_input(_sample_player_input())
-	_client_state = _net.latest_state()
+		_input_seq += 1
+		var command := _sample_player_input()
+		_net.send_input(_input_seq, command)
+		_pending_inputs.append({"seq": _input_seq, "input": command})
+	_client_state = _predicted_state()
+
+
+## Reconciles against the latest snapshot and predicts our hero: take the
+## authoritative world, drop the inputs the server has already applied, and replay
+## the rest onto our hero with the same movement math the server runs. Authority is
+## never forked — every snapshot rolls our hero back to the server's truth before
+## the replay, so a misprediction self-corrects within a tick. Remote entities are
+## drawn straight from the snapshot (interpolation is a later slice).
+func _predicted_state() -> SimState:
+	var state := _net.latest_state()
+	if state == null:
+		return null
+	var ack := _net.latest_ack()
+	while not _pending_inputs.is_empty() and _pending_inputs[0]["seq"] <= ack:
+		_pending_inputs.pop_front()
+	var hero := _local_hero(state)
+	if hero != null:
+		for entry in _pending_inputs:
+			SimCore.apply_movement(hero, entry["input"])
+	return state
+
+
+## Our hero in `state`: the one mobile, non-creep unit on our team. The walking
+## skeleton seats exactly one hero per team, so the first match is ours.
+func _local_hero(state: SimState) -> SimEntity:
+	for id in state.entities:
+		var entity: SimEntity = state.entities[id]
+		if entity.team == _my_team and not entity.is_structure and not entity.is_creep:
+			return entity
+	return null
 
 
 # --- Network event handlers -------------------------------------------------
@@ -192,6 +242,7 @@ func _on_client_left(peer_id: int) -> void:
 
 func _on_joined_server(team: int) -> void:
 	_joined = true
+	_my_team = team
 	print("joined the server as team %d" % team)
 
 
@@ -208,7 +259,7 @@ func _on_server_left() -> void:
 # --- Rendering --------------------------------------------------------------
 
 
-## The world this client should draw: the decoded snapshot on a pure CLIENT, the
+## The world this client should draw: the predicted state on a pure CLIENT, the
 ## authoritative simulation otherwise.
 func _active_state() -> SimState:
 	return _client_state if _mode == Mode.CLIENT else _sim.state

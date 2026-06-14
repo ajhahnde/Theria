@@ -9,14 +9,24 @@ extends GutTest
 func test_protocol_version_is_pinned() -> void:
 	# The netcode compatibility axis. A wire-shape change must bump this in the
 	# same commit; this guard makes an accidental drift fail the suite.
-	assert_eq(NetProtocol.PROTOCOL_VERSION, 1)
+	assert_eq(NetProtocol.PROTOCOL_VERSION, 2)
 
 
-func test_input_round_trips() -> void:
+func test_input_round_trips_with_its_sequence_number() -> void:
 	var command := InputCommand.new()
 	command.move_dir = Vector2(-1.0, 0.5)
-	var restored := NetProtocol.decode_input(NetProtocol.encode_input(command))
+	var data := NetProtocol.encode_input(42, command)
+	assert_eq(NetProtocol.decode_input_seq(data), 42, "the sequence number survives the trip")
+	var restored := NetProtocol.decode_input(data)
 	assert_eq(restored.move_dir, command.move_dir, "the move direction survives the trip")
+
+
+func test_snapshot_carries_the_input_ack() -> void:
+	# The ack lets the client prune the inputs the server has applied and replay
+	# only the rest. It rides the snapshot dict; decode_snapshot ignores it.
+	var snapshot := NetProtocol.encode_snapshot(SimState.new(), 7)
+	assert_eq(snapshot["ack"], 7, "the last applied input sequence is carried")
+	assert_eq(NetProtocol.encode_snapshot(SimState.new())["ack"], -1, "no input applied -> -1")
 
 
 func test_a_populated_snapshot_round_trips_every_field() -> void:

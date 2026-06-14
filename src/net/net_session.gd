@@ -37,6 +37,11 @@ var is_server: bool = false
 ## than snapping the unit to a halt on a single lost frame.
 var _latest_inputs: Dictionary = {}
 
+## Server: the sequence number of each peer's latest input. Echoed back in the
+## snapshot as the peer's `ack` so the client can prune the inputs the server has
+## already applied and replay only the rest.
+var _latest_input_seqs: Dictionary = {}
+
 ## Client: the most recent snapshot Dictionary, or empty until the first arrives.
 var _latest_snapshot: Dictionary = {}
 
@@ -73,16 +78,18 @@ func close() -> void:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
 	_latest_inputs.clear()
+	_latest_input_seqs.clear()
 	_latest_snapshot = {}
 
 
 # --- Server side ------------------------------------------------------------
 
 
-## Broadcasts the authoritative world to every client. Called once per tick by
-## the host driver, after the simulation has stepped.
-func broadcast_snapshot(state: SimState) -> void:
-	_push_snapshot.rpc(NetProtocol.encode_snapshot(state))
+## Broadcasts the authoritative world to every client. Called once per tick by the
+## host driver, after the simulation has stepped. `ack` is the sequence number of
+## the remote input applied this tick, so the client can reconcile against it.
+func broadcast_snapshot(state: SimState, ack: int = -1) -> void:
+	_push_snapshot.rpc(NetProtocol.encode_snapshot(state, ack))
 
 
 ## The last input received from `peer_id`, or null if none has arrived yet.
@@ -90,8 +97,15 @@ func input_for(peer_id: int) -> InputCommand:
 	return _latest_inputs.get(peer_id, null)
 
 
+## The sequence number of `peer_id`'s last input, or -1 if none has arrived. The
+## host passes this to `broadcast_snapshot` as the tick's ack.
+func input_seq_for(peer_id: int) -> int:
+	return _latest_input_seqs.get(peer_id, -1)
+
+
 func _on_server_peer_disconnected(peer_id: int) -> void:
 	_latest_inputs.erase(peer_id)
+	_latest_input_seqs.erase(peer_id)
 	client_left.emit(peer_id)
 
 
@@ -108,15 +122,18 @@ func _submit_hello(protocol_version: int) -> void:
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _push_input(data: Array) -> void:
-	_latest_inputs[multiplayer.get_remote_sender_id()] = NetProtocol.decode_input(data)
+	var peer_id := multiplayer.get_remote_sender_id()
+	_latest_inputs[peer_id] = NetProtocol.decode_input(data)
+	_latest_input_seqs[peer_id] = NetProtocol.decode_input_seq(data)
 
 
 # --- Client side ------------------------------------------------------------
 
 
-## Sends this tick's intent up to the server. A no-op before the handshake.
-func send_input(command: InputCommand) -> void:
-	_push_input.rpc_id(1, NetProtocol.encode_input(command))
+## Sends this tick's intent up to the server, stamped with `seq` so the server can
+## acknowledge it. A no-op before the handshake.
+func send_input(seq: int, command: InputCommand) -> void:
+	_push_input.rpc_id(1, NetProtocol.encode_input(seq, command))
 
 
 func has_snapshot() -> bool:
@@ -128,6 +145,13 @@ func latest_state() -> SimState:
 	if _latest_snapshot.is_empty():
 		return null
 	return NetProtocol.decode_snapshot(_latest_snapshot)
+
+
+## The sequence number of the last input the server had applied in the latest
+## snapshot, or -1 if none. The client prunes inputs at or below this and replays
+## the rest onto the snapshot to predict its hero.
+func latest_ack() -> int:
+	return _latest_snapshot.get("ack", -1)
 
 
 func _on_connected_to_server() -> void:
