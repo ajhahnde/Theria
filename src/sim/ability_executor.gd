@@ -1,0 +1,109 @@
+class_name AbilityExecutor
+extends RefCounted
+## Resolves and applies one ability cast against the world. Pure and engine-free,
+## exactly like the simulation core it runs inside: given the world, a caster, the
+## ability's spec, and the cast intent, it picks the targets and applies the effect
+## deterministically — in insertion order, with integer damage — so the result is a
+## function of state and input alone and replays identically.
+##
+## `can_cast` is the gate (form, resource, cooldown); `execute` performs the cast
+## and books the cost. SimCore's ability step calls them in that order. Effects
+## that reduce hp leave the kill to the core's death-resolution pass, so an ability
+## and an auto-attack that both finish a unit this tick kill it once.
+
+## Whether `caster` may cast `spec` this tick: the spec must belong to the caster's
+## active form, the caster must hold enough resource, and the ability must be off
+## cooldown. Reads only — the decision never mutates the world.
+static func can_cast(caster: SimEntity, spec: AbilitySpec) -> bool:
+	if spec.form != caster.form:
+		return false
+	if caster.resource < spec.cost:
+		return false
+	if caster.ability_cooldowns.get(spec.id, 0) > 0:
+		return false
+	return true
+
+
+## Performs the cast: applies the effect, puts the ability on cooldown, and spends
+## its resource. Assumes `can_cast` already passed (SimCore gates on it), so the
+## resource never goes negative. `command` carries the aim — the target point for an
+## aimed ability, the target id for a unit-locked one.
+static func execute(
+	state: SimState, caster: SimEntity, spec: AbilitySpec, command: InputCommand
+) -> void:
+	match spec.effect:
+		AbilitySpec.EFFECT_TRANSFORM:
+			_transform(caster)
+		AbilitySpec.EFFECT_HEAL:
+			caster.hp = mini(caster.max_hp, caster.hp + spec.power)
+		AbilitySpec.EFFECT_DAMAGE:
+			for target in _targets(state, caster, spec, command):
+				target.hp -= spec.power
+	caster.ability_cooldowns[spec.id] = spec.cooldown_ticks
+	caster.resource -= spec.cost
+
+
+## Swaps the caster to its other form and to that form's resource pool: max and
+## regen switch, the current pool carries over clamped to the new max, and the regen
+## counter restarts. Ability cooldowns are keyed by ability id, so they persist
+## untouched across the swap.
+static func _transform(caster: SimEntity) -> void:
+	var to_form := 1 - caster.form
+	caster.form = to_form
+	caster.resource_max = caster.form_resource_max[to_form]
+	caster.resource_regen_ticks = caster.form_resource_regen[to_form]
+	caster.resource = mini(caster.resource, caster.resource_max)
+	caster.resource_regen_counter = 0
+
+
+## The enemies a damaging ability strikes, by its targeting mode. SELF deals no
+## outward damage (returns nothing); UNIT returns its one locked enemy when valid
+## and in range; an aimed ability returns every enemy inside the area at its landing
+## point. Allies and non-combat entities (max_hp 0) are never struck.
+static func _targets(
+	state: SimState, caster: SimEntity, spec: AbilitySpec, command: InputCommand
+) -> Array[SimEntity]:
+	var hits: Array[SimEntity] = []
+	match spec.target_kind:
+		AbilitySpec.TARGET_UNIT:
+			var t: SimEntity = state.get_entity(command.target_id)
+			if (
+				t != null
+				and t.max_hp > 0
+				and t.team != caster.team
+				and caster.position.distance_to(t.position) <= spec.range
+			):
+				hits.append(t)
+		AbilitySpec.TARGET_SKILLSHOT, AbilitySpec.TARGET_GROUND:
+			hits = _enemies_in_area(state, caster, _landing_point(caster, spec, command), spec.radius)
+	return hits
+
+
+## Where an aimed ability lands. A skillshot flies the full range along the aim
+## direction (it travels through the cursor — dodgeable); a ground-target lands on
+## the chosen point, pulled in to the maximum range. A zero-length aim lands on the
+## caster.
+static func _landing_point(caster: SimEntity, spec: AbilitySpec, command: InputCommand) -> Vector2:
+	var to_aim := command.target_point - caster.position
+	var dist := to_aim.length()
+	if dist <= 0.0:
+		return caster.position
+	var dir := to_aim / dist
+	if spec.target_kind == AbilitySpec.TARGET_SKILLSHOT:
+		return caster.position + dir * spec.range
+	return caster.position + dir * minf(spec.range, dist)
+
+
+## Every living enemy of `caster` within `radius` of `center`, in deterministic
+## insertion order.
+static func _enemies_in_area(
+	state: SimState, caster: SimEntity, center: Vector2, radius: float
+) -> Array[SimEntity]:
+	var hits: Array[SimEntity] = []
+	for id in state.entities:
+		var e: SimEntity = state.entities[id]
+		if e.team == caster.team or e.max_hp <= 0:
+			continue
+		if center.distance_to(e.position) <= radius:
+			hits.append(e)
+	return hits

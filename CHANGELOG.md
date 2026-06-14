@@ -35,6 +35,15 @@ protocol version.
 
 ### Added
 
+- A data-driven hero ability layer for Theria's shapeshifters. Every hero carries
+  two kits — a human form and an animal form — and transforms between them, each
+  form metering its own resource pool with separate cooldowns that keep running
+  across the swap. Abilities are defined as catalog data, not code: each is
+  skillshot-aimed, ground-targeted, unit-locked, or self-cast, and resolves inside
+  the authoritative simulation alongside the existing combat, so it stays
+  deterministic and replayable. This release includes one proving kit that
+  exercises the whole schema; the distinct heroes and the controls that cast them
+  are built against it next.
 - An in-game connect screen: a windowed launch now opens a menu to start a
   single-machine practice match, host a listen-server, or join one by address,
   instead of requiring command-line flags. The flags still work and skip the menu

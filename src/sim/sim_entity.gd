@@ -39,6 +39,37 @@ var is_creep: bool = false
 var lane: int = 0
 var waypoint_index: int = 0
 
+## A hero is the player/bot unit that, on top of the shared auto-attack, casts
+## abilities. The ability layer is inert until `is_hero` is set and a kit equipped
+## (see SimCore.equip_kit); a hero with no kit just auto-attacks like before.
+var is_hero: bool = false
+
+## The active shapeshifter form (AbilitySpec.FORM_HUMAN / FORM_ANIMAL). Only the
+## abilities of the active form are castable; a TRANSFORM ability flips it.
+var form: int = 0
+
+## The current form's resource pool: `resource` spent to cast (gated against
+## `resource_max`), refilled by one point every `resource_regen_ticks` ticks
+## (0 = no regen), counted by `resource_regen_counter`. The two forms keep separate
+## pools — `form_resource_max[form]` / `form_resource_regen[form]` hold each form's
+## tuning, and a transform swaps the active values to the destination form's.
+var resource: int = 0
+var resource_max: int = 0
+var resource_regen_ticks: int = 0
+var resource_regen_counter: int = 0
+var form_resource_max: PackedInt32Array = PackedInt32Array([0, 0])
+var form_resource_regen: PackedInt32Array = PackedInt32Array([0, 0])
+
+## Remaining cooldown in ticks per ability id (absent/0 = ready). Keyed by ability
+## id rather than slot, so a cooldown set in one form is still ticking when the hero
+## transforms back to it.
+var ability_cooldowns: Dictionary = {}
+
+## The hero's bar, by form: `kit[form][slot]` is the ability id in that slot, or
+## absent for an empty slot. Set once when the kit is equipped; the catalog holds
+## the immutable specs the ids resolve to.
+var kit: Dictionary = {}
+
 
 func _init(
 	p_id: int = 0,
@@ -68,4 +99,14 @@ func clone() -> SimEntity:
 	copy.is_creep = is_creep
 	copy.lane = lane
 	copy.waypoint_index = waypoint_index
+	copy.is_hero = is_hero
+	copy.form = form
+	copy.resource = resource
+	copy.resource_max = resource_max
+	copy.resource_regen_ticks = resource_regen_ticks
+	copy.resource_regen_counter = resource_regen_counter
+	copy.form_resource_max = form_resource_max.duplicate()
+	copy.form_resource_regen = form_resource_regen.duplicate()
+	copy.ability_cooldowns = ability_cooldowns.duplicate()
+	copy.kit = kit.duplicate(true)
 	return copy

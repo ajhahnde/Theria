@@ -66,7 +66,7 @@ delay adapts to the connection's measured jitter rather than being fixed.
 
 | Path           | Contents                                              |
 | :------------- | :---------------------------------------------------- |
-| `src/sim`    | The authoritative simulation core and its data types. |
+| `src/sim`    | The authoritative simulation core, its data types, and the data-driven hero ability layer. |
 | `src/bot`    | Bot input derived from the world state.               |
 | `src/net`    | Listen-server transport, the client/server wire protocol, remote-entity interpolation, and the playtest link-condition simulator. |
 | `src/client` | The connect menu, local input sampling, and rendering. |

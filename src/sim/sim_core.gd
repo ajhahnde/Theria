@@ -112,6 +112,35 @@ func add_hero(team: int, position: Vector2, move_speed: float) -> int:
 	return _register(entity)
 
 
+## Turns an already-spawned hero into an ability caster by equipping a kit from the
+## catalog. The hero starts in human form with that form's resource pool full; the
+## animal pool waits for the first transform. Kept separate from `add_hero` so a
+## bare walking-skeleton hero — and the netcode that spawns one — is unchanged until
+## a kit is equipped. A no-op for an unknown hero id or kit.
+func equip_kit(hero_id: int, kit_id: String) -> void:
+	var hero := state.get_entity(hero_id)
+	if hero == null:
+		return
+	var kit_def := AbilityData.kit(kit_id)
+	if kit_def.is_empty():
+		return
+	var res: Dictionary = kit_def["resource"]
+	hero.is_hero = true
+	hero.form = AbilitySpec.FORM_HUMAN
+	hero.kit = (kit_def["abilities"] as Dictionary).duplicate(true)
+	hero.form_resource_max = PackedInt32Array(
+		[res[AbilitySpec.FORM_HUMAN]["max"], res[AbilitySpec.FORM_ANIMAL]["max"]]
+	)
+	hero.form_resource_regen = PackedInt32Array(
+		[res[AbilitySpec.FORM_HUMAN]["regen_ticks"], res[AbilitySpec.FORM_ANIMAL]["regen_ticks"]]
+	)
+	hero.resource_max = hero.form_resource_max[AbilitySpec.FORM_HUMAN]
+	hero.resource_regen_ticks = hero.form_resource_regen[AbilitySpec.FORM_HUMAN]
+	hero.resource = hero.resource_max
+	hero.resource_regen_counter = 0
+	hero.ability_cooldowns = {}
+
+
 ## Creates a lane creep at `position` and returns its id. The creep marches
 ## `lane` toward the enemy nexus and fights with the shared combat primitive.
 func add_creep(team: int, lane: int, position: Vector2) -> int:
@@ -138,6 +167,7 @@ func step(inputs: Dictionary) -> void:
 	_step_spawning()
 	_step_movement(inputs)
 	_step_creeps()
+	_step_abilities(inputs)
 	_step_combat()
 	_resolve_deaths()
 	state.tick += 1
@@ -222,6 +252,62 @@ func _step_creeps() -> void:
 			if creep.waypoint_index < path.size() - 1:
 				creep.waypoint_index += 1
 		creep.position = MapData.clamp_to_bounds(creep.position)
+
+
+## Advances the ability layer one tick. First every hero's passive upkeep —
+## resource regen and cooldown decay — which runs regardless of input so pools refill
+## and cooldowns elapse while idle. Then any casts requested this tick: a cast is
+## gated through AbilityExecutor.can_cast (form, resource, cooldown) and, on success,
+## applied and its cost booked. Runs before `_step_combat` so an ability and an
+## auto-attack that both finish a unit this tick are reconciled in one death pass.
+## Pure and insertion-ordered like the rest of the step.
+func _step_abilities(inputs: Dictionary) -> void:
+	for id in state.entities:
+		var hero: SimEntity = state.entities[id]
+		if not hero.is_hero:
+			continue
+		_regen_resource(hero)
+		_tick_cooldowns(hero)
+	for id in inputs:
+		var command: InputCommand = inputs[id]
+		if command == null or command.ability_slot < 0:
+			continue
+		var hero: SimEntity = state.get_entity(id)
+		if hero != null and hero.is_hero:
+			_try_cast(hero, command)
+
+
+## Restores one resource point once `resource_regen_ticks` ticks have elapsed,
+## capped at the form's max. Integer regen on a tick interval keeps the pool
+## deterministic; a form with no regen (or a full pool) is left alone.
+func _regen_resource(hero: SimEntity) -> void:
+	if hero.resource_regen_ticks <= 0 or hero.resource >= hero.resource_max:
+		return
+	hero.resource_regen_counter += 1
+	if hero.resource_regen_counter >= hero.resource_regen_ticks:
+		hero.resource_regen_counter = 0
+		hero.resource = mini(hero.resource + 1, hero.resource_max)
+
+
+## Ticks every live ability cooldown down by one. Keyed by ability id, so a cooldown
+## set in one form keeps elapsing while the hero is in the other.
+func _tick_cooldowns(hero: SimEntity) -> void:
+	for ability_id in hero.ability_cooldowns:
+		var remaining: int = hero.ability_cooldowns[ability_id]
+		if remaining > 0:
+			hero.ability_cooldowns[ability_id] = remaining - 1
+
+
+## Resolves the requested slot to an ability of the hero's active form and casts it
+## if it is castable. An empty slot, an off-form slot, or a failed gate is a no-op.
+func _try_cast(hero: SimEntity, command: InputCommand) -> void:
+	var slots: Dictionary = hero.kit.get(hero.form, {})
+	var ability_id: int = slots.get(command.ability_slot, 0)
+	if ability_id == 0 or not AbilityData.has_ability(ability_id):
+		return
+	var spec := AbilityData.spec(ability_id)
+	if AbilityExecutor.can_cast(hero, spec):
+		AbilityExecutor.execute(state, hero, spec, command)
 
 
 ## Every attacker ticks its cooldown down; when it hits 0 and an enemy is in
