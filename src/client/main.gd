@@ -1,7 +1,9 @@
 extends Node2D
-## Presentation + driver for the v0.1 match. It runs in one of three modes,
-## selected from the command line (`-- --host`, `-- --join [address]`, or nothing
-## for a single-machine game):
+## Presentation + driver for the v0.1 match. It runs in one of three modes. A
+## windowed launch with no mode flag opens a connect menu to pick one; the command
+## line selects one directly (`-- --host`, `-- --join [address]`, `-- --local`); and
+## a headless launch with no flag defaults to LOCAL, so the automated smokes need no
+## menu and stay flag-driven:
 ##
 ##   LOCAL  — owns the authoritative SimCore and drives both heroes (player + bot),
 ##            exactly the single-machine walking skeleton.
@@ -72,6 +74,16 @@ const HP_BAR_FG := Color(0.4, 0.85, 0.4)
 var _mode: int = Mode.LOCAL
 var _join_address := DEFAULT_JOIN_ADDRESS
 
+## True once a mode flag (`--host`/`--join`/`--local`) was passed, so a flagged or
+## headless launch enters the match directly and a bare windowed launch shows the menu.
+var _explicit_mode := false
+## The connect-menu overlay while it is up; freed once a mode is chosen. Null on a
+## flagged or headless launch (the menu never opens) and after the match begins.
+var _menu_layer: CanvasLayer = null
+## False until a mode has started; gates the per-tick driver and entity draw so the
+## menu can sit over a static backdrop with no simulation running behind it.
+var _started := false
+
 ## CLIENT: optional simulated link conditions parsed from `--netsim
 ## <latency>,<jitter>,<loss>`, as `[latency_ms, jitter_ms, loss]`, or empty to take
 ## snapshots as they arrive. A debug aid for exercising the smoothing under a worse
@@ -108,17 +120,16 @@ var _pending_inputs: Array[Dictionary] = []
 
 func _ready() -> void:
 	_configure_from_cmdline()
-	match _mode:
-		Mode.HOST:
-			_start_host()
-		Mode.CLIENT:
-			_start_client()
-		_:
-			_start_local()
+	if _explicit_mode or _is_headless():
+		_enter_match()
+	else:
+		_open_connect_menu()
 	queue_redraw()
 
 
 func _physics_process(_delta: float) -> void:
+	if not _started:
+		return
 	match _mode:
 		Mode.HOST:
 			_tick_host()
@@ -139,11 +150,16 @@ func _configure_from_cmdline() -> void:
 		var arg := args[i]
 		if arg == "--host":
 			_mode = Mode.HOST
+			_explicit_mode = true
 		elif arg == "--join":
 			_mode = Mode.CLIENT
+			_explicit_mode = true
 			if i + 1 < args.size() and not args[i + 1].begins_with("--"):
 				_join_address = args[i + 1]
 				i += 1
+		elif arg == "--local":
+			_mode = Mode.LOCAL
+			_explicit_mode = true
 		elif arg == "--netsim":
 			if i + 1 < args.size() and not args[i + 1].begins_with("--"):
 				_netsim_params = _parse_netsim(args[i + 1])
@@ -168,6 +184,67 @@ func _parse_netsim(value: String) -> Array:
 		maxf(0.0, (nums[1] if nums.size() > 1 else 0.0)),
 		clampf((nums[2] if nums.size() > 2 else 0.0), 0.0, 1.0),
 	]
+
+
+## Dispatches to the selected mode and marks the match live, so the per-tick driver
+## and entity draw begin. The single entry point for both the command-line path and a
+## menu choice.
+func _enter_match() -> void:
+	match _mode:
+		Mode.HOST:
+			_start_host()
+		Mode.CLIENT:
+			_start_client()
+		_:
+			_start_local()
+	_started = true
+	queue_redraw()
+
+
+## A headless run cannot drive a menu (no display, no pointer), so it always takes a
+## mode from the command line — defaulting to LOCAL — and never opens the connect
+## screen. This keeps the automated smokes flag-driven and non-interactive.
+func _is_headless() -> bool:
+	return DisplayServer.get_name() == "headless"
+
+
+## Opens the connect menu over a static map backdrop and waits: the match begins only
+## once the player picks a mode. Built in code on its own CanvasLayer so it renders in
+## screen space, above the world the zoomed game camera draws.
+func _open_connect_menu() -> void:
+	var menu := ConnectMenu.new()
+	menu.default_address = DEFAULT_JOIN_ADDRESS
+	menu.practice_requested.connect(_on_practice_requested)
+	menu.host_requested.connect(_on_host_requested)
+	menu.join_requested.connect(_on_join_requested)
+	_menu_layer = CanvasLayer.new()
+	_menu_layer.add_child(menu)
+	add_child(_menu_layer)
+
+
+func _on_practice_requested() -> void:
+	_mode = Mode.LOCAL
+	_close_menu_and_enter()
+
+
+func _on_host_requested() -> void:
+	_mode = Mode.HOST
+	_close_menu_and_enter()
+
+
+func _on_join_requested(address: String) -> void:
+	_mode = Mode.CLIENT
+	_join_address = address
+	_close_menu_and_enter()
+
+
+## Tears down the connect overlay and enters the chosen match. Shared by every menu
+## choice so the menu always leaves the tree exactly once, before the match runs.
+func _close_menu_and_enter() -> void:
+	if _menu_layer != null:
+		_menu_layer.queue_free()
+		_menu_layer = null
+	_enter_match()
 
 
 func _start_local() -> void:
@@ -362,7 +439,8 @@ func _active_state() -> SimState:
 
 func _draw() -> void:
 	_draw_map()
-	_draw_entities()
+	if _started:
+		_draw_entities()
 
 
 func _draw_map() -> void:

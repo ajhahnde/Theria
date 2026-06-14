@@ -68,7 +68,7 @@ delay adapts to the connection's measured jitter rather than being fixed.
 | `src/sim`    | The authoritative simulation core and its data types. |
 | `src/bot`    | Bot input derived from the world state.               |
 | `src/net`    | Listen-server transport, the client/server wire protocol, remote-entity interpolation, and the playtest link-condition simulator. |
-| `src/client` | Local input sampling and rendering.                   |
+| `src/client` | The connect menu, local input sampling, and rendering. |
 | `test/unit`  | Headless tests of the simulation and the wire protocol. |
 | `scenes`     | Godot scenes.                                         |
 
@@ -80,16 +80,20 @@ Open the project in Godot 4.6 and press Play, or from the command line:
 godot --path .
 ```
 
-Move the hero with **WASD** or the **arrow keys**; the bot walks toward it.
+A connect screen opens: choose **Practice** for a single-machine match, **Host** to
+start a listen-server, or type an address and **Join** one. Move the hero with
+**WASD** or the **arrow keys**; the bot walks toward it.
 
 ### Multiplayer
 
-Pass arguments after `--` to choose a role; with neither, the game runs on a
-single machine. One peer hosts and a second joins it:
+The connect screen's **Host** and **Join** cover multiplayer. The same roles can be
+selected on the command line, which skips the menu — this is how a headless run picks
+a role, since a menu cannot be driven without a display:
 
 ```sh
 godot --path . -- --host             # host the match (you are team 0)
 godot --path . -- --join 127.0.0.1   # join a host at an address (you are team 1)
+godot --path . -- --local            # a single-machine match, no menu
 ```
 
 The host is authoritative and fills any empty player slot with a bot. The joining

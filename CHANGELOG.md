@@ -35,6 +35,11 @@ protocol version.
 
 ### Added
 
+- An in-game connect screen: a windowed launch now opens a menu to start a
+  single-machine practice match, host a listen-server, or join one by address,
+  instead of requiring command-line flags. The flags still work and skip the menu
+  (`-- --host`, `-- --join <address>`, `-- --local`); a headless launch with no flag
+  still defaults to a single-machine match, so the automated tooling is unchanged.
 - Networked multiplayer over a listen-server: one player hosts the authoritative
   match and a second joins over the network, each driving their own hero while the
   host simulates and broadcasts the world every tick. Peers exchange a protocol
