@@ -63,6 +63,18 @@ const JUNGLE_CAMPS: Array[Vector2] = [
 	Vector2(-500.0, 500.0),
 ]
 
+## Defensive tower slots for team 0: two per lane, sitting on the lane segment
+## that leaves team 0's base, so each corridor is guarded on the way in. Team 1's
+## slots are these negated (see `tower_positions`), which — because the lane set
+## is closed under point reflection — also land on the lanes, by team 1's base.
+## Every slot lies exactly on a lane polyline segment and inside the bounds.
+const TOWER_SLOTS_TEAM0: Array[Vector2] = [
+	Vector2(-1600.0, 800.0),
+	Vector2(-1600.0, -800.0),
+	Vector2(-800.0, 1600.0),
+	Vector2(800.0, 1600.0),
+]
+
 
 static func spawn_for_team(team: int) -> Vector2:
 	return TEAM_SPAWNS[team % TEAM_SPAWNS.size()]
@@ -70,6 +82,17 @@ static func spawn_for_team(team: int) -> Vector2:
 
 static func nexus_for_team(team: int) -> Vector2:
 	return NEXUS_POSITIONS[team % NEXUS_POSITIONS.size()]
+
+
+## The tower slots for `team`: team 0's stored slots, negated for team 1 so the
+## two teams' defences are point reflections of each other. Returns a fresh copy
+## so callers cannot mutate the stored geometry.
+static func tower_positions(team: int) -> PackedVector2Array:
+	var slots := PackedVector2Array(TOWER_SLOTS_TEAM0)
+	if team % 2 == 1:
+		for i in slots.size():
+			slots[i] = -slots[i]
+	return slots
 
 
 static func lane_count() -> int:

@@ -10,6 +10,8 @@ extends Node2D
 
 const HERO_SPEED := 320.0
 const BOT_SPEED := 300.0
+const HERO_HP := 600
+const BOT_HP := 600
 const HERO_TEAM := 0
 const BOT_TEAM := 1
 
@@ -26,7 +28,14 @@ const LANE_COLOR := Color(0.5, 0.5, 0.55, 0.7)
 const LANE_WIDTH := 28.0
 const CAMP_COLOR := Color(0.45, 0.7, 0.45)
 const CAMP_RADIUS := 60.0
-const NEXUS_SIZE := Vector2(140.0, 140.0)
+const TOWER_SIZE := Vector2(110.0, 110.0)
+const NEXUS_SIZE := Vector2(200.0, 200.0)
+
+## HP bar, drawn above any entity that carries health.
+const HP_BAR_SIZE := Vector2(160.0, 26.0)
+const HP_BAR_OFFSET := Vector2(-80.0, -150.0)
+const HP_BAR_BG := Color(0.0, 0.0, 0.0, 0.6)
+const HP_BAR_FG := Color(0.4, 0.85, 0.4)
 
 var _sim := SimCore.new()
 var _bot := BotController.new()
@@ -35,8 +44,9 @@ var _bot_id: int = 0
 
 
 func _ready() -> void:
-	_hero_id = _sim.add_entity(HERO_TEAM, MapData.spawn_for_team(HERO_TEAM), HERO_SPEED)
-	_bot_id = _sim.add_entity(BOT_TEAM, MapData.spawn_for_team(BOT_TEAM), BOT_SPEED)
+	_sim.spawn_structures()
+	_hero_id = _sim.add_entity(HERO_TEAM, MapData.spawn_for_team(HERO_TEAM), HERO_SPEED, HERO_HP)
+	_bot_id = _sim.add_entity(BOT_TEAM, MapData.spawn_for_team(BOT_TEAM), BOT_SPEED, BOT_HP)
 	queue_redraw()
 
 
@@ -61,16 +71,29 @@ func _draw_map() -> void:
 		draw_polyline(MapData.lane_path(lane, HERO_TEAM), LANE_COLOR, LANE_WIDTH)
 	for camp in MapData.JUNGLE_CAMPS:
 		draw_circle(camp, CAMP_RADIUS, CAMP_COLOR)
-	for team in MapData.NEXUS_POSITIONS.size():
-		var centre := MapData.nexus_for_team(team)
-		var rect := Rect2(centre - NEXUS_SIZE * 0.5, NEXUS_SIZE)
-		draw_rect(rect, _team_color(team), true)
 
 
+## Draws the live world: towers and nexuses as squares, mobile units as circles,
+## each with an HP bar. Structures and units share one entity list, so they all
+## come straight from the authoritative state.
 func _draw_entities() -> void:
 	for id in _sim.state.entities:
 		var entity: SimEntity = _sim.state.entities[id]
-		draw_circle(entity.position, ENTITY_RADIUS, _team_color(entity.team))
+		if entity.is_structure:
+			var size := NEXUS_SIZE if entity.is_nexus else TOWER_SIZE
+			draw_rect(Rect2(entity.position - size * 0.5, size), _team_color(entity.team), true)
+		else:
+			draw_circle(entity.position, ENTITY_RADIUS, _team_color(entity.team))
+		_draw_hp_bar(entity)
+
+
+func _draw_hp_bar(entity: SimEntity) -> void:
+	if entity.max_hp <= 0:
+		return
+	var frac := clampf(float(entity.hp) / float(entity.max_hp), 0.0, 1.0)
+	var top_left := entity.position + HP_BAR_OFFSET
+	draw_rect(Rect2(top_left, HP_BAR_SIZE), HP_BAR_BG, true)
+	draw_rect(Rect2(top_left, Vector2(HP_BAR_SIZE.x * frac, HP_BAR_SIZE.y)), HP_BAR_FG, true)
 
 
 func _team_color(team: int) -> Color:

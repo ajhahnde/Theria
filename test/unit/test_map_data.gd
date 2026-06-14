@@ -60,3 +60,46 @@ func test_jungle_camps_are_closed_under_negation_and_in_bounds() -> void:
 	for camp in camps:
 		assert_eq(MapData.clamp_to_bounds(camp), camp, "every camp must sit inside the bounds")
 		assert_true(camps.has(-camp), "every camp must have a mirrored partner (negated)")
+
+
+func test_tower_positions_are_point_symmetric_between_teams() -> void:
+	var team0 := MapData.tower_positions(0)
+	var team1 := MapData.tower_positions(1)
+	assert_eq(team0.size(), team1.size(), "both teams field the same number of towers")
+	for i in team0.size():
+		assert_eq(team1[i], -team0[i], "team 1's towers must be team 0's towers negated")
+
+
+func test_tower_positions_returns_a_fresh_copy() -> void:
+	var first := MapData.tower_positions(0)
+	first[0] = Vector2.ZERO
+	var second := MapData.tower_positions(0)
+	assert_ne(first[0], second[0], "mutating a returned tower list must not alter the stored slots")
+
+
+func test_every_tower_sits_on_a_lane_and_inside_the_bounds() -> void:
+	for team in MapData.NEXUS_POSITIONS.size():
+		for tower in MapData.tower_positions(team):
+			assert_eq(MapData.clamp_to_bounds(tower), tower, "every tower must sit inside the bounds")
+			var on_a_lane := false
+			for lane in MapData.lane_count():
+				if _point_on_polyline(tower, MapData.lane_path(lane, 0)):
+					on_a_lane = true
+					break
+			assert_true(on_a_lane, "every tower must sit on a lane corridor")
+
+
+## True when `point` lies on one of the polyline's segments (within a small
+## tolerance): the segment endpoints span it and it is collinear with them.
+func _point_on_polyline(point: Vector2, path: PackedVector2Array) -> bool:
+	for i in path.size() - 1:
+		var a := path[i]
+		var b := path[i + 1]
+		var ab := b - a
+		var ap := point - a
+		if absf(ab.cross(ap)) > 0.01:
+			continue
+		var t := ap.dot(ab) / ab.length_squared()
+		if t >= 0.0 and t <= 1.0:
+			return true
+	return false

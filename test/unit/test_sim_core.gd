@@ -51,3 +51,116 @@ func _run_scripted(ticks: int) -> Vector2:
 		command.move_dir = Vector2(sin(float(i)), cos(float(i)))
 		sim.step({id: command})
 	return sim.state.get_entity(id).position
+
+
+# --- Combat: towers, structures, and the win condition ----------------------
+
+
+func test_structure_strikes_an_enemy_in_range() -> void:
+	var sim := SimCore.new()
+	sim.add_structure(0, Vector2.ZERO, 1000, 50, 200.0, 60)
+	var enemy := sim.add_entity(1, Vector2(100.0, 0.0), 0.0, 600)
+	sim.step({})
+	assert_eq(sim.state.get_entity(enemy).hp, 550, "an in-range enemy takes attack_damage")
+
+
+func test_structure_ignores_an_enemy_out_of_range() -> void:
+	var sim := SimCore.new()
+	sim.add_structure(0, Vector2.ZERO, 1000, 50, 200.0, 60)
+	var enemy := sim.add_entity(1, Vector2(300.0, 0.0), 0.0, 600)
+	sim.step({})
+	assert_eq(sim.state.get_entity(enemy).hp, 600, "an out-of-range enemy is untouched")
+
+
+func test_structure_does_not_strike_an_ally() -> void:
+	var sim := SimCore.new()
+	sim.add_structure(0, Vector2.ZERO, 1000, 50, 200.0, 60)
+	var ally := sim.add_entity(0, Vector2(100.0, 0.0), 0.0, 600)
+	sim.step({})
+	assert_eq(sim.state.get_entity(ally).hp, 600, "an attacker never hits its own team")
+
+
+func test_attack_respects_its_cooldown() -> void:
+	var sim := SimCore.new()
+	sim.add_structure(0, Vector2.ZERO, 1000, 50, 200.0, 60)
+	var enemy := sim.add_entity(1, Vector2(100.0, 0.0), 0.0, 600)
+	for _i in 60:
+		sim.step({})
+	assert_eq(sim.state.get_entity(enemy).hp, 550, "one hit lands across a full cooldown window")
+	sim.step({})
+	assert_eq(sim.state.get_entity(enemy).hp, 500, "the cooldown elapses next tick, second hit lands")
+
+
+func test_an_entity_dies_when_its_hp_reaches_zero() -> void:
+	var sim := SimCore.new()
+	sim.add_structure(0, Vector2.ZERO, 1000, 100, 200.0, 60)
+	var enemy := sim.add_entity(1, Vector2(100.0, 0.0), 0.0, 100)
+	sim.step({})
+	assert_null(sim.state.get_entity(enemy), "an entity at 0 hp is removed from the world")
+
+
+func test_nexus_destruction_sets_the_winner_and_freezes_the_match() -> void:
+	var sim := SimCore.new()
+	sim.add_structure(0, Vector2.ZERO, 100, 0, 0.0, 0, true)  # team 0 nexus
+	# A team 1 attacker in range (a stand-in for the creeps that arrive next).
+	sim.add_structure(1, Vector2(100.0, 0.0), 1000, 100, 200.0, 60)
+	sim.step({})
+	assert_true(sim.state.is_match_over(), "a destroyed nexus ends the match")
+	assert_eq(sim.state.winner, 1, "the other team wins")
+	var frozen_tick := sim.state.tick
+	sim.step({})
+	assert_eq(sim.state.tick, frozen_tick, "the simulation no-ops once the match is over")
+
+
+func test_spawn_structures_is_mirror_fair() -> void:
+	var sim := SimCore.new()
+	sim.spawn_structures()
+	# Every team 0 structure must have a team 1 structure at the negated position
+	# with the same role and health, so neither side starts ahead.
+	for id in sim.state.entities:
+		var s: SimEntity = sim.state.entities[id]
+		if s.team != 0:
+			continue
+		var mirror := _structure_at(sim.state, 1, -s.position)
+		assert_not_null(mirror, "team 0's structure must have a mirrored team 1 counterpart")
+		if mirror != null:
+			assert_eq(mirror.is_nexus, s.is_nexus, "the mirrored structure must share its role")
+			assert_eq(mirror.max_hp, s.max_hp, "the mirrored structure must share its health")
+
+
+func _structure_at(state: SimState, team: int, position: Vector2) -> SimEntity:
+	for id in state.entities:
+		var s: SimEntity = state.entities[id]
+		if s.team == team and s.is_structure and s.position.is_equal_approx(position):
+			return s
+	return null
+
+
+func test_a_combat_run_replays_identically() -> void:
+	var a := _run_combat()
+	var b := _run_combat()
+	assert_eq(a, b, "combat must be a pure function of state + input")
+
+
+func _run_combat() -> Array:
+	var sim := SimCore.new()
+	sim.spawn_structures()
+	var hero := sim.add_entity(0, MapData.spawn_for_team(0), 320.0, 600)
+	var bot := sim.add_entity(1, MapData.spawn_for_team(1), 300.0, 600)
+	var march := InputCommand.new()
+	march.move_dir = Vector2(1.0, -1.0)  # walk both units toward the enemy base
+	for _i in 600:
+		sim.step({hero: march, bot: march})
+	return _snapshot(sim.state)
+
+
+## A deterministic, comparable digest of the world: every surviving entity's id,
+## hp, and rounded position, ordered by id.
+func _snapshot(state: SimState) -> Array:
+	var ids := state.entities.keys()
+	ids.sort()
+	var rows: Array = []
+	for id in ids:
+		var entity: SimEntity = state.entities[id]
+		rows.append([id, entity.hp, entity.position.round()])
+	return rows
