@@ -106,7 +106,71 @@ func test_the_buffer_is_capped_to_its_limit() -> void:
 	assert_eq(interp.sample(0.0).get_entity(7).position, Vector2(oldest_kept, 0.0))
 
 
+# --- adaptive render delay --------------------------------------------------
+
+
+func test_delay_floors_at_min_on_even_arrivals() -> void:
+	var interp := SnapshotInterpolator.new()
+	# Snapshots arriving evenly at the 60 Hz interval carry almost no jitter, so the
+	# delay sits on its floor rather than buffering latency it does not need.
+	_push_arrivals(interp, _repeat(16.0, 10))
+	assert_almost_eq(interp.target_delay_ms(), SnapshotInterpolator.MIN_DELAY_MS, 0.001)
+
+
+func test_delay_attacks_to_cover_a_large_gap() -> void:
+	var interp := SnapshotInterpolator.new()
+	# A single late snapshot opens a 200 ms gap; the delay snaps up at once to cover
+	# it (worst gap + margin), so the next late packet is already absorbed.
+	_push_arrivals(interp, [16.0, 16.0, 16.0, 200.0])
+	var expected := 200.0 + SnapshotInterpolator.GAP_MARGIN_MS
+	assert_almost_eq(interp.target_delay_ms(), expected, 0.001)
+
+
+func test_delay_caps_at_max() -> void:
+	var interp := SnapshotInterpolator.new()
+	# A pathological gap must not buy unbounded latency — the delay clamps to the cap.
+	_push_arrivals(interp, [16.0, 16.0, 1000.0])
+	assert_almost_eq(interp.target_delay_ms(), SnapshotInterpolator.MAX_DELAY_MS, 0.001)
+
+
+func test_delay_releases_slowly_after_jitter_subsides() -> void:
+	var interp := SnapshotInterpolator.new()
+	# A 200 ms gap drives the delay to its peak; once even arrivals resume the gap
+	# leaves the recent window and the delay eases back down — gradually, not snapping
+	# to the floor (which would warp remote-unit motion), but well below the peak.
+	var peak := 200.0 + SnapshotInterpolator.GAP_MARGIN_MS  # the delay right after the gap
+	var intervals := [16.0, 16.0, 200.0]
+	intervals.append_array(_repeat(16.0, 20))
+	_push_arrivals(interp, intervals)
+	assert_lt(interp.target_delay_ms(), peak, "the delay relaxes once jitter subsides")
+	assert_gt(
+		interp.target_delay_ms(),
+		SnapshotInterpolator.MIN_DELAY_MS,
+		"but eases down slowly rather than snapping to the floor",
+	)
+
+
 # --- helpers ----------------------------------------------------------------
+
+
+## Pushes a stream of snapshots whose inter-arrival times are `intervals`
+## (milliseconds). The first arrives at time 0; time and tick advance per interval.
+func _push_arrivals(interp: SnapshotInterpolator, intervals: Array) -> void:
+	var time := 0.0
+	var tick := 1
+	interp.push(_state(tick, {7: Vector2(float(tick), 0.0)}), time)
+	for dt: float in intervals:
+		time += dt
+		tick += 1
+		interp.push(_state(tick, {7: Vector2(float(tick), 0.0)}), time)
+
+
+## An array of `value` repeated `count` times.
+func _repeat(value: float, count: int) -> Array:
+	var out: Array = []
+	for _i in count:
+		out.append(value)
+	return out
 
 
 ## A snapshot at `tick` whose entities are the given `id -> position` pairs.

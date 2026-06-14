@@ -30,14 +30,6 @@ const BOT_TEAM := 1
 
 const DEFAULT_JOIN_ADDRESS := "127.0.0.1"
 
-## CLIENT: how far in the past (milliseconds) remote entities are rendered. The
-## interpolator draws them between the snapshots bracketing this delayed time, so
-## the delay is the jitter/loss budget — at the 60 Hz snapshot rate it spans ~6
-## snapshots, enough that a late or dropped one is covered by its neighbours rather
-## than stalling the unit. Only remote entities pay it; our own hero is predicted to
-## the present, so the local player feels no added latency.
-const INTERPOLATION_DELAY_MS := 100.0
-
 const HERO_COLOR := Color(0.36, 0.66, 1.0)
 const BOT_COLOR := Color(1.0, 0.42, 0.38)
 const ENTITY_RADIUS := 44.0
@@ -222,13 +214,13 @@ func _buffer_latest_snapshot() -> void:
 		_interp.push(state, Time.get_ticks_msec())
 
 
-## The world to draw: remote entities interpolated INTERPOLATION_DELAY_MS in the
-## past (smoothing jitter and absorbing dropped snapshots), with our own hero
-## overlaid at its predicted, present-time position. Authority is never forked —
-## both halves derive only from the server's snapshots. Null until the first
-## snapshot arrives.
+## The world to draw: remote entities interpolated in the past (smoothing jitter and
+## absorbing dropped snapshots), with our own hero overlaid at its predicted,
+## present-time position. The interpolation delay adapts to the live connection's
+## jitter. Authority is never forked — both halves derive only from the server's
+## snapshots. Null until the first snapshot arrives.
 func _render_state() -> SimState:
-	var state := _interp.sample(Time.get_ticks_msec() - INTERPOLATION_DELAY_MS)
+	var state := _interp.sample(Time.get_ticks_msec() - _interp.target_delay_ms())
 	if state == null:
 		return null
 	_overlay_predicted_hero(state)

@@ -16,18 +16,52 @@ extends RefCounted
 ## (which `main.gd` overlays on top of the interpolated world). Authority is never
 ## forked: every position here is derived from the server's snapshots alone.
 ##
+## How far in the past to render is **adaptive** (`target_delay_ms`): it tracks the
+## worst recent gap between snapshot arrivals, so a clean connection pays little
+## latency while a jittery one buffers enough to ride out its hiccups. The delay
+## snaps up to cover a new worst gap and eases back down slowly, and is clamped to a
+## sane band, so it tracks the live connection without warping remote-unit motion.
+##
 ## Pure and engine-free — it takes arrival and render times as plain milliseconds
 ## rather than reading a clock, so the whole buffer/sample round trip is unit-tested
 ## headlessly, like the simulation and protocol cores.
 
 ## How many recent snapshots to retain. At the 60 Hz snapshot rate this spans
-## ~200 ms, comfortably more than any sane interpolation delay needs to bracket.
-const BUFFER_LIMIT := 12
+## ~530 ms — comfortably more than MAX_DELAY_MS, so even at the largest adaptive
+## delay the render time falls between two buffered snapshots rather than clamping
+## to the oldest one.
+const BUFFER_LIMIT := 32
+
+## Adaptive render-delay bounds, in milliseconds. The delay tracks the observed
+## snapshot jitter so a clean connection pays little latency while a jittery one
+## buffers enough to ride out its worst gap. Floored so even a perfect line keeps a
+## small cushion (≈3 snapshots), capped so a pathological connection never adds
+## unbounded latency.
+const MIN_DELAY_MS := 50.0
+const MAX_DELAY_MS := 250.0
+
+## Headroom added over the worst recent arrival gap — ≈2 snapshots at 60 Hz — so the
+## render time stays behind the newest snapshot through one further late packet.
+const GAP_MARGIN_MS := 33.0
+
+## How many of the most recent arrival gaps the delay is sized against. A bad gap is
+## remembered for this many snapshots and then forgotten, decoupling how long jitter
+## influences the delay from how much history the buffer keeps for sampling.
+const GAP_WINDOW := 8
+
+## How fast the delay relaxes once jitter subsides. It snaps up at once to cover a
+## new worst gap (fast attack) but eases down by this fraction per snapshot (slow
+## release), so a single hiccup does not make the delay itself jitter and warp the
+## apparent speed of remote units.
+const DELAY_RELEASE := 0.05
 
 ## Buffered snapshots, oldest first, each `{time: float, state: SimState}` where
 ## `time` is the arrival time in milliseconds. Kept ascending in both arrival time
 ## and tick by `push`.
 var _buffer: Array[Dictionary] = []
+
+## The current adaptive render delay in milliseconds, updated as snapshots arrive.
+var _delay_estimate_ms := MIN_DELAY_MS
 
 
 ## Records a freshly received snapshot, stamped with its arrival time in
@@ -42,10 +76,45 @@ func push(state: SimState, recv_msec: float) -> void:
 	_buffer.append({"time": recv_msec, "state": state})
 	if _buffer.size() > BUFFER_LIMIT:
 		_buffer.pop_front()
+	_update_delay_estimate()
 
 
 func has_data() -> bool:
 	return not _buffer.is_empty()
+
+
+## The render delay the client should currently apply: remote entities are drawn
+## this many milliseconds in the past. It adapts to observed snapshot jitter
+## (clamped to [MIN_DELAY_MS, MAX_DELAY_MS]) so the smoothing tracks the live
+## connection instead of a fixed guess.
+func target_delay_ms() -> float:
+	return _delay_estimate_ms
+
+
+## Resizes the adaptive delay to cover the worst arrival gap over the recent window,
+## plus a margin, clamped to the delay band. Snaps up at once to cover a worse gap
+## (so the next late packet is already absorbed) and eases down slowly otherwise (so
+## the delay itself stays steady). A no-op until two snapshots give a first gap.
+func _update_delay_estimate() -> void:
+	if _buffer.size() < 2:
+		return
+	var target := clampf(_max_recent_gap() + GAP_MARGIN_MS, MIN_DELAY_MS, MAX_DELAY_MS)
+	if target >= _delay_estimate_ms:
+		_delay_estimate_ms = target
+	else:
+		_delay_estimate_ms += (target - _delay_estimate_ms) * DELAY_RELEASE
+
+
+## The widest interval between consecutive arrivals over the last GAP_WINDOW gaps —
+## the worst recent hiccup the delay must stay ahead of.
+func _max_recent_gap() -> float:
+	var widest := 0.0
+	var start: int = maxi(1, _buffer.size() - GAP_WINDOW)
+	for i in range(start, _buffer.size()):
+		var gap: float = _buffer[i]["time"] - _buffer[i - 1]["time"]
+		if gap > widest:
+			widest = gap
+	return widest
 
 
 ## The interpolated world at `render_msec`: the two buffered snapshots that bracket

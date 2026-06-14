@@ -58,7 +58,8 @@ locally so input feels instant, reconciling against every snapshot: it rolls bac
 to the server's state and replays the inputs the server has not yet applied, using
 the same movement code the server runs. Remote units — the enemy hero, creeps, and
 structures — are rendered a short delay in the past, interpolated between buffered
-snapshots, so they move smoothly through network jitter and dropped packets.
+snapshots, so they move smoothly through network jitter and dropped packets; that
+delay adapts to the connection's measured jitter rather than being fixed.
 
 ## Layout
 

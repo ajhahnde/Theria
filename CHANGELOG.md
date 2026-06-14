@@ -45,6 +45,10 @@ protocol version.
   they move smoothly instead of stuttering or snapping when packets arrive with
   jitter or are dropped. The delay applies only to remote units; the joined
   player's own hero is still predicted to the present and feels no added latency.
+- Adaptive interpolation delay: the delay remote units are rendered behind now
+  tracks the connection's measured jitter instead of a fixed value — a clean
+  connection pays little added latency, while a jittery one automatically buffers
+  enough to ride out its worst gap, within a bounded range.
 - Combat heroes: the player's hero and the bot now auto-attack the nearest enemy
   in range, so a hero can clear creep waves, pressure towers, duel the enemy hero,
   and push a lane toward the nexus. Heroes spawn at their base fountain.
