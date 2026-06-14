@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="icon.svg" alt="Ashmere" width="72">
+<img src="icon.svg" alt="Theria" width="72">
 
 <h1>Changelog</h1>
 

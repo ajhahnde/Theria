@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="icon.svg" alt="Ashmere" width="96">
+<img src="icon.svg" alt="Theria" width="96">
 
-<h1>Ashmere</h1>
+<h1>Theria</h1>
 
-<h3>Fabled creatures clash over the ruins of Ashmere — a city lost to ash and water</h3>
+<h3>Shapeshifter tribes clash over the savanna and the jungle — fight as both human and beast</h3>
 
 <p>
   <a href="https://github.com/ajhahnde/Ashmere/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ajhahnde/Ashmere/ci.yml?branch=main&style=flat-square&label=ci" alt="CI"></a>
@@ -26,15 +26,16 @@
 
 ## About
 
-Ashmere is a 2.5D top-down, pixel-art multiplayer online battle arena built in
-Godot 4. Fabled creatures fight over the drowned ruins of
-Ashmere, a fabled city lost to ash and water. Two teams of three contest lanes
-and a jungle to break each other's nexus.
+Theria is a top-down multiplayer online battle arena built in Godot 4, set in a
+world of shapeshifters — tribes whose members fight in both a human and an animal
+form. Two teams of three, each drawn from a shapeshifter people, contest savanna
+lanes and an equatorial jungle to break each other's nexus.
 
 The first milestone is a **walking skeleton**: one player-controlled hero and
 one bot moving on the 3v3 arena under a server-authoritative, fixed-timestep
 simulation. With that authority model proven, networked play over a
-listen-server now runs on top of it; items and the meta layer come later.
+listen-server now runs on top of it; heroes, abilities, and the art direction
+come next.
 
 ## Architecture
 
