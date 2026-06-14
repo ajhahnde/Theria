@@ -42,11 +42,11 @@ var _latest_inputs: Dictionary = {}
 ## already applied and replay only the rest.
 var _latest_input_seqs: Dictionary = {}
 
-## Client: the most recent snapshot Dictionary, or empty until the first arrives.
+## Client: the most recent snapshot as packed bytes, or empty until the first arrives.
 ## Updated as snapshots are drained from the conditioner, so it reflects the shaped
 ## stream — both prediction (which reads it) and interpolation see the same delayed,
 ## lossy arrivals.
-var _latest_snapshot: Dictionary = {}
+var _latest_snapshot: PackedByteArray = PackedByteArray()
 
 ## Client: optional network-condition simulator on the snapshot intake. When set,
 ## every received snapshot passes through it (delayed, jittered, or dropped) and is
@@ -88,7 +88,7 @@ func close() -> void:
 		multiplayer.multiplayer_peer = null
 	_latest_inputs.clear()
 	_latest_input_seqs.clear()
-	_latest_snapshot = {}
+	_latest_snapshot = PackedByteArray()
 
 
 # --- Server side ------------------------------------------------------------
@@ -174,9 +174,12 @@ func latest_state() -> SimState:
 
 ## The sequence number of the last input the server had applied in the latest
 ## snapshot, or -1 if none. The client prunes inputs at or below this and replays
-## the rest onto the snapshot to predict its hero.
+## the rest onto the snapshot to predict its hero. Read from the snapshot header
+## alone, without decoding its entities.
 func latest_ack() -> int:
-	return _latest_snapshot.get("ack", -1)
+	if _latest_snapshot.is_empty():
+		return -1
+	return NetProtocol.decode_snapshot_ack(_latest_snapshot)
 
 
 ## Releases the snapshots whose conditioner hold has elapsed by `now_msec` and
@@ -212,7 +215,7 @@ func _reject(reason: String) -> void:
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func _push_snapshot(data: Dictionary) -> void:
+func _push_snapshot(data: PackedByteArray) -> void:
 	if _netsim != null:
 		# Hold the snapshot in the conditioner; `drain_snapshots` delivers it later.
 		_netsim.receive(data, Time.get_ticks_msec())

@@ -9,7 +9,7 @@ extends GutTest
 func test_protocol_version_is_pinned() -> void:
 	# The netcode compatibility axis. A wire-shape change must bump this in the
 	# same commit; this guard makes an accidental drift fail the suite.
-	assert_eq(NetProtocol.PROTOCOL_VERSION, 2)
+	assert_eq(NetProtocol.PROTOCOL_VERSION, 3)
 
 
 func test_input_round_trips_with_its_sequence_number() -> void:
@@ -22,11 +22,30 @@ func test_input_round_trips_with_its_sequence_number() -> void:
 
 
 func test_snapshot_carries_the_input_ack() -> void:
-	# The ack lets the client prune the inputs the server has applied and replay
-	# only the rest. It rides the snapshot dict; decode_snapshot ignores it.
+	# The ack lets the client prune the inputs the server has applied and replay only
+	# the rest. It rides the snapshot header and is read without decoding the world.
 	var snapshot := NetProtocol.encode_snapshot(SimState.new(), 7)
-	assert_eq(snapshot["ack"], 7, "the last applied input sequence is carried")
-	assert_eq(NetProtocol.encode_snapshot(SimState.new())["ack"], -1, "no input applied -> -1")
+	assert_eq(NetProtocol.decode_snapshot_ack(snapshot), 7, "the last applied input seq is carried")
+	var no_input := NetProtocol.encode_snapshot(SimState.new())
+	assert_eq(NetProtocol.decode_snapshot_ack(no_input), -1, "no input applied -> -1")
+
+
+func test_an_empty_snapshot_is_just_the_header() -> void:
+	# Header only: tick u32, ack i32, winner i8, entity count u16 = 11 bytes. The
+	# snapshot is packed bytes, not a Variant container.
+	var bytes := NetProtocol.encode_snapshot(SimState.new())
+	assert_true(bytes is PackedByteArray, "the snapshot is a packed byte record")
+	assert_eq(bytes.size(), 11, "an empty world encodes to the 11-byte header alone")
+
+
+func test_a_full_snapshot_fits_in_one_unreliable_datagram() -> void:
+	# The opening creep wave is the heaviest world the walking skeleton sends. Packed,
+	# it must fit one datagram so the snapshot is not fragmented above the transport
+	# MTU (~1392 bytes) — the regression guard for the binary wire format.
+	var state := _opening_wave_state()
+	assert_gt(state.entities.size(), 20, "the opening wave is a heavy world")
+	var bytes := NetProtocol.encode_snapshot(state)
+	assert_lt(bytes.size(), 1392, "the packed snapshot fits one datagram, below the MTU")
 
 
 func test_a_populated_snapshot_round_trips_every_field() -> void:
@@ -84,4 +103,16 @@ func _populated_state() -> SimState:
 	sim.add_creep(0, 0, MapData.lane_path(0, 0)[0])
 	for _i in 5:
 		sim.step({})
+	return sim.state
+
+
+## The heaviest world the walking skeleton broadcasts: both teams' structures, both
+## heroes, and a full creep wave on every lane. The first wave spawns on tick 0, so a
+## single step seeds it.
+func _opening_wave_state() -> SimState:
+	var sim := SimCore.new()
+	sim.spawn_structures()
+	sim.add_hero(0, MapData.spawn_for_team(0), 320.0)
+	sim.add_hero(1, MapData.spawn_for_team(1), 300.0)
+	sim.step({})
 	return sim.state

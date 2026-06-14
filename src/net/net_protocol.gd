@@ -2,11 +2,14 @@ class_name NetProtocol
 extends RefCounted
 ## The wire contract between the authoritative server and its clients.
 ##
-## Pure, engine-free serialization: it turns an InputCommand or a whole SimState
-## into plain Variant data (Arrays / Dictionaries the high-level multiplayer layer
-## encodes for us) and back, with no transport or rendering coupling. Keeping it
-## here — separate from the socket layer in NetSession — is what lets the round
-## trip be unit-tested headlessly, exactly like the simulation core.
+## Pure, engine-free serialization: it turns an InputCommand into a small Array, and
+## a whole SimState into a compact, fixed-layout binary record (a PackedByteArray),
+## and back, with no transport or rendering coupling. The snapshot is packed tight — a
+## short header plus one fixed byte record per entity, floats narrowed to 32 bits — so
+## a full world stays inside a single unreliable datagram rather than fragmenting above
+## the transport MTU. Keeping the shaping here — separate from the socket layer in
+## NetSession — is what lets the round trip be unit-tested headlessly, exactly like the
+## simulation core.
 ##
 ## The server is authoritative, but a client predicts its own hero locally and
 ## reconciles against each snapshot. The wire carries two sequence markers for
@@ -18,7 +21,7 @@ extends RefCounted
 ## connect and a mismatch is refused, so an old client cannot desync against a
 ## newer server. Bump it on any wire-shape change here.
 
-const PROTOCOL_VERSION := 2
+const PROTOCOL_VERSION := 3
 
 ## Bit positions for the packed entity-flags field (slot 11 of an entity row).
 const _FLAG_STRUCTURE := 1
@@ -46,36 +49,59 @@ static func decode_input(data: Array) -> InputCommand:
 	return command
 
 
-## Encodes the full authoritative world into a snapshot: the tick, the winner,
-## `ack` (the last client input sequence the server has applied — `-1` when no
-## remote input has been processed), and every entity as a fixed-order row.
-## Insertion order is preserved so the decoded state iterates identically to the
-## server's — deterministic rendering. The client reads `ack` to prune and replay
-## its pending inputs; `decode_snapshot` ignores it (it is a transport marker, not
-## world state), so it is read straight off the raw dict.
-static func encode_snapshot(state: SimState, ack: int = -1) -> Dictionary:
-	var rows: Array = []
+## Encodes the full authoritative world into a snapshot byte record: an 11-byte
+## header — tick (u32), `ack` (i32), winner (i8), entity count (u16) — followed by one
+## fixed entity record per entity in insertion order. `ack` is the last client input
+## sequence the server has applied (`-1` when none); the client reads it to prune and
+## replay its pending inputs, and `decode_snapshot` ignores it (a transport marker, not
+## world state) — `decode_snapshot_ack` reads it alone, straight from the header,
+## without decoding the entities. Insertion order is preserved so the decoded world
+## iterates identically to the server's — deterministic rendering. Packing the world
+## this tight keeps a full creep wave inside one unreliable datagram.
+static func encode_snapshot(state: SimState, ack: int = -1) -> PackedByteArray:
+	var buf := StreamPeerBuffer.new()
+	buf.put_u32(state.tick)
+	buf.put_32(ack)
+	buf.put_8(state.winner)
+	buf.put_u16(state.entities.size())
 	for id in state.entities:
-		rows.append(_encode_entity(state.entities[id]))
-	return {"tick": state.tick, "winner": state.winner, "ack": ack, "entities": rows}
+		_encode_entity(buf, state.entities[id])
+	return buf.data_array
 
 
-## Rebuilds a SimState from a snapshot. The result is a render target, not a
-## simulation: it carries no id allocator and is never stepped on the client.
-static func decode_snapshot(data: Dictionary) -> SimState:
+## Reads the input ack out of a snapshot's header without decoding its entities — the
+## client needs it every tick to reconcile, but not the whole world. The ack is the
+## second header field: a signed 32-bit int at byte offset 4.
+static func decode_snapshot_ack(bytes: PackedByteArray) -> int:
+	return bytes.decode_s32(4)
+
+
+## Rebuilds a SimState from a snapshot byte record. The result is a render target, not
+## a simulation: it carries no id allocator and is never stepped on the client.
+static func decode_snapshot(bytes: PackedByteArray) -> SimState:
+	var buf := StreamPeerBuffer.new()
+	buf.data_array = bytes
+	buf.seek(0)
 	var state := SimState.new()
-	state.tick = data["tick"]
-	state.winner = data["winner"]
-	for row in data["entities"]:
-		state.add_entity(_decode_entity(row))
+	state.tick = buf.get_u32()
+	buf.get_32()  # ack — a transport marker, read via decode_snapshot_ack, not world state
+	state.winner = buf.get_8()
+	var count := buf.get_u16()
+	for _i in count:
+		state.add_entity(_decode_entity(buf))
 	return state
 
 
-## Fixed entity row, by slot:
-##   0 id  1 team  2 pos.x  3 pos.y  4 move_speed  5 hp  6 max_hp
-##   7 attack_damage  8 attack_range  9 attack_cooldown_ticks  10 cooldown
-##   11 flags (structure|nexus|creep bitmask)  12 lane  13 waypoint_index
-static func _encode_entity(entity: SimEntity) -> Array:
+## Fixed entity byte record, by field (little-endian, 35 bytes):
+##   id u32  team u8  pos.x f32  pos.y f32  move_speed f32  hp i16  max_hp i16
+##   attack_damage i16  attack_range f32  attack_cooldown_ticks u16  cooldown u16
+##   flags u8 (structure|nexus|creep bitmask)  lane u8  waypoint_index u16
+## Floats are narrowed to 32 bits: positions are Vector2 (already 32-bit) so they round
+## trip exactly, and the round-number tunings are exact in 32 bits too. The integer
+## widths cover the v0.1 tuning with headroom (hp and damage sit well inside a signed
+## 16-bit range); a tuning that outgrows a field must widen it here in lockstep with a
+## PROTOCOL_VERSION bump.
+static func _encode_entity(buf: StreamPeerBuffer, entity: SimEntity) -> void:
 	var flags := 0
 	if entity.is_structure:
 		flags |= _FLAG_STRUCTURE
@@ -83,36 +109,38 @@ static func _encode_entity(entity: SimEntity) -> Array:
 		flags |= _FLAG_NEXUS
 	if entity.is_creep:
 		flags |= _FLAG_CREEP
-	return [
-		entity.id,
-		entity.team,
-		entity.position.x,
-		entity.position.y,
-		entity.move_speed,
-		entity.hp,
-		entity.max_hp,
-		entity.attack_damage,
-		entity.attack_range,
-		entity.attack_cooldown_ticks,
-		entity.cooldown,
-		flags,
-		entity.lane,
-		entity.waypoint_index,
-	]
+	buf.put_u32(entity.id)
+	buf.put_u8(entity.team)
+	buf.put_float(entity.position.x)
+	buf.put_float(entity.position.y)
+	buf.put_float(entity.move_speed)
+	buf.put_16(entity.hp)
+	buf.put_16(entity.max_hp)
+	buf.put_16(entity.attack_damage)
+	buf.put_float(entity.attack_range)
+	buf.put_u16(entity.attack_cooldown_ticks)
+	buf.put_u16(entity.cooldown)
+	buf.put_u8(flags)
+	buf.put_u8(entity.lane)
+	buf.put_u16(entity.waypoint_index)
 
 
-static func _decode_entity(row: Array) -> SimEntity:
-	var entity := SimEntity.new(row[0], row[1], Vector2(row[2], row[3]), row[4])
-	entity.hp = row[5]
-	entity.max_hp = row[6]
-	entity.attack_damage = row[7]
-	entity.attack_range = row[8]
-	entity.attack_cooldown_ticks = row[9]
-	entity.cooldown = row[10]
-	var flags: int = row[11]
+static func _decode_entity(buf: StreamPeerBuffer) -> SimEntity:
+	var id := buf.get_u32()
+	var team := buf.get_u8()
+	var pos := Vector2(buf.get_float(), buf.get_float())
+	var move_speed := buf.get_float()
+	var entity := SimEntity.new(id, team, pos, move_speed)
+	entity.hp = buf.get_16()
+	entity.max_hp = buf.get_16()
+	entity.attack_damage = buf.get_16()
+	entity.attack_range = buf.get_float()
+	entity.attack_cooldown_ticks = buf.get_u16()
+	entity.cooldown = buf.get_u16()
+	var flags := buf.get_u8()
 	entity.is_structure = (flags & _FLAG_STRUCTURE) != 0
 	entity.is_nexus = (flags & _FLAG_NEXUS) != 0
 	entity.is_creep = (flags & _FLAG_CREEP) != 0
-	entity.lane = row[12]
-	entity.waypoint_index = row[13]
+	entity.lane = buf.get_u8()
+	entity.waypoint_index = buf.get_u16()
 	return entity

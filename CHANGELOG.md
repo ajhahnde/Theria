@@ -24,6 +24,15 @@ protocol version.
 
 ## [Unreleased]
 
+### Changed
+
+- Snapshots are now packed into a compact binary wire format — a short header plus one
+  fixed byte record per entity, with floats narrowed to 32 bits — instead of a Variant
+  container. A full opening creep wave drops from roughly 3 KB to under 1 KB, so the
+  whole world now fits in a single unreliable datagram rather than fragmenting above the
+  transport's packet-size limit. Rendering is unchanged; positions round-trip exactly.
+  The netcode protocol version advances to 3 (the snapshot wire shape changed).
+
 ### Added
 
 - Networked multiplayer over a listen-server: one player hosts the authoritative
