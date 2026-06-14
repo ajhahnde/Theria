@@ -15,6 +15,11 @@ extends Node2D
 ##            interpolated between buffered snapshots, so they move smoothly through
 ##            network jitter and dropped packets.
 ##
+## A CLIENT may add `--netsim <latency>,<jitter>,<loss>` to shape its incoming
+## snapshot stream as if it had crossed a worse link — a debug aid for watching the
+## adaptive interpolation delay grow and the interpolation cover dropped snapshots,
+## since the local machine and LAN deliver almost perfectly.
+##
 ## All authority stays in SimCore; the transport lives in NetSession; the wire
 ## shaping lives in NetProtocol; remote-entity smoothing lives in
 ## SnapshotInterpolator. This node samples input, routes it, predicts the client's
@@ -29,6 +34,10 @@ const HERO_TEAM := 0
 const BOT_TEAM := 1
 
 const DEFAULT_JOIN_ADDRESS := "127.0.0.1"
+
+## Fixed seed for the optional `--netsim` conditioner, so a shaped playtest replays
+## the same drop and jitter pattern run to run.
+const NETSIM_SEED := 1
 
 const HERO_COLOR := Color(0.36, 0.66, 1.0)
 const BOT_COLOR := Color(1.0, 0.42, 0.38)
@@ -62,6 +71,12 @@ const HP_BAR_FG := Color(0.4, 0.85, 0.4)
 
 var _mode: int = Mode.LOCAL
 var _join_address := DEFAULT_JOIN_ADDRESS
+
+## CLIENT: optional simulated link conditions parsed from `--netsim
+## <latency>,<jitter>,<loss>`, as `[latency_ms, jitter_ms, loss]`, or empty to take
+## snapshots as they arrive. A debug aid for exercising the smoothing under a worse
+## link than the local machine provides.
+var _netsim_params: Array = []
 
 ## The authoritative simulation. Present in LOCAL and HOST; null on a pure CLIENT,
 ## which renders snapshots instead of simulating.
@@ -129,7 +144,30 @@ func _configure_from_cmdline() -> void:
 			if i + 1 < args.size() and not args[i + 1].begins_with("--"):
 				_join_address = args[i + 1]
 				i += 1
+		elif arg == "--netsim":
+			if i + 1 < args.size() and not args[i + 1].begins_with("--"):
+				_netsim_params = _parse_netsim(args[i + 1])
+				i += 1
 		i += 1
+
+
+## Parses a `--netsim` value of `latency,jitter,loss` (milliseconds, milliseconds,
+## a 0..1 fraction) into `[latency_ms, jitter_ms, loss]`. Missing trailing fields
+## default to zero; a malformed value yields an empty array (the conditioner is left
+## off) with a warning, so a typo degrades to a normal join rather than a crash.
+func _parse_netsim(value: String) -> Array:
+	var fields := value.split(",")
+	var nums: Array = []
+	for field in fields:
+		if not field.is_valid_float():
+			push_warning("ignoring malformed --netsim value %s (want latency,jitter,loss)" % value)
+			return []
+		nums.append(field.to_float())
+	return [
+		maxf(0.0, (nums[0] if nums.size() > 0 else 0.0)),
+		maxf(0.0, (nums[1] if nums.size() > 1 else 0.0)),
+		clampf((nums[2] if nums.size() > 2 else 0.0), 0.0, 1.0),
+	]
 
 
 func _start_local() -> void:
@@ -160,6 +198,12 @@ func _start_client() -> void:
 	_net.joined_server.connect(_on_joined_server)
 	_net.rejected.connect(_on_rejected)
 	_net.server_left.connect(_on_server_left)
+	if not _netsim_params.is_empty():
+		_net.configure_netsim(_netsim_params[0], _netsim_params[1], _netsim_params[2], NETSIM_SEED)
+		print(
+			"simulating link: %d ms latency, %d ms jitter, %d%% loss"
+			% [_netsim_params[0], _netsim_params[1], roundi(_netsim_params[2] * 100.0)]
+		)
 	print("joining %s:%d" % [_join_address, NetSession.DEFAULT_PORT])
 
 
@@ -200,18 +244,26 @@ func _tick_client() -> void:
 		var command := _sample_player_input()
 		_net.send_input(_input_seq, command)
 		_pending_inputs.append({"seq": _input_seq, "input": command})
-	_buffer_latest_snapshot()
+	_buffer_snapshots()
 	_client_state = _render_state()
 
 
-## Feeds the freshest authoritative snapshot into the interpolation buffer. The
-## interpolator ignores ticks it already holds, so polling the latest every frame is
-## safe — each distinct snapshot is buffered once with its arrival time. This decodes
-## its own copy; prediction decodes a separate one, so neither mutates the buffer.
-func _buffer_latest_snapshot() -> void:
-	var state := _net.latest_state()
-	if state != null:
-		_interp.push(state, Time.get_ticks_msec())
+## Feeds freshly arrived authoritative snapshots into the interpolation buffer. With
+## a `--netsim` conditioner the session releases the snapshots whose simulated delay
+## has elapsed, each stamped with its release time so the injected latency and jitter
+## read as real arrival timing; otherwise the freshest snapshot is buffered as it
+## stands. Either way the interpolator ignores ticks it already holds, so each
+## distinct snapshot is buffered once. This decodes its own copy; prediction decodes
+## a separate one, so neither mutates the buffer.
+func _buffer_snapshots() -> void:
+	var now := float(Time.get_ticks_msec())
+	if _net.is_conditioned():
+		for delivered in _net.drain_snapshots(now):
+			_interp.push(delivered["state"], delivered["time"])
+	else:
+		var state := _net.latest_state()
+		if state != null:
+			_interp.push(state, now)
 
 
 ## The world to draw: remote entities interpolated in the past (smoothing jitter and

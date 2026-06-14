@@ -49,6 +49,13 @@ protocol version.
   tracks the connection's measured jitter instead of a fixed value — a clean
   connection pays little added latency, while a jittery one automatically buffers
   enough to ride out its worst gap, within a bounded range.
+- Simulated link conditions for playtesting: a joining player can add `--netsim
+  <latency>,<jitter>,<loss>` to shape their incoming snapshot stream as if it had
+  crossed a worse network — delaying, jittering, and dropping snapshots — so the
+  remote-unit smoothing and its adaptive delay can be seen working on a local
+  machine or LAN, which otherwise deliver almost perfectly. A client-side debug aid
+  only: it changes nothing the host sends and no wire bytes, so the protocol version
+  is unaffected.
 - Combat heroes: the player's hero and the bot now auto-attack the nearest enemy
   in range, so a hero can clear creep waves, pressure towers, duel the enemy hero,
   and push a lane toward the nexus. Heroes spawn at their base fountain.

@@ -67,7 +67,7 @@ delay adapts to the connection's measured jitter rather than being fixed.
 | :------------- | :---------------------------------------------------- |
 | `src/sim`    | The authoritative simulation core and its data types. |
 | `src/bot`    | Bot input derived from the world state.               |
-| `src/net`    | Listen-server transport, the client/server wire protocol, and remote-entity interpolation. |
+| `src/net`    | Listen-server transport, the client/server wire protocol, remote-entity interpolation, and the playtest link-condition simulator. |
 | `src/client` | Local input sampling and rendering.                   |
 | `test/unit`  | Headless tests of the simulation and the wire protocol. |
 | `scenes`     | Godot scenes.                                         |
@@ -94,6 +94,19 @@ godot --path . -- --join 127.0.0.1   # join a host at an address (you are team 1
 
 The host is authoritative and fills any empty player slot with a bot. The joining
 player's hero is predicted locally, so it responds without waiting on the host.
+
+A local machine and a clean LAN deliver snapshots almost perfectly, so the smoothing
+that exists to ride out a bad connection is never really exercised. To see it work, a
+joining player can simulate a worse link on their incoming snapshot stream:
+
+```sh
+# join with 150 ms latency, 50 ms of jitter, and 10% packet loss
+godot --path . -- --join 127.0.0.1 --netsim 150,50,0.1
+```
+
+This shapes only what the client receives — it changes nothing the host sends and no
+wire bytes — and makes the remote units visibly buffer further behind and the
+interpolation cover the dropped snapshots. It is a debug aid, not a gameplay option.
 
 ## Testing
 

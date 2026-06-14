@@ -43,7 +43,16 @@ var _latest_inputs: Dictionary = {}
 var _latest_input_seqs: Dictionary = {}
 
 ## Client: the most recent snapshot Dictionary, or empty until the first arrives.
+## Updated as snapshots are drained from the conditioner, so it reflects the shaped
+## stream — both prediction (which reads it) and interpolation see the same delayed,
+## lossy arrivals.
 var _latest_snapshot: Dictionary = {}
+
+## Client: optional network-condition simulator on the snapshot intake. When set,
+## every received snapshot passes through it (delayed, jittered, or dropped) and is
+## delivered by `drain_snapshots` rather than landing immediately. Null on the server
+## and on a client running without `--netsim`, in which case snapshots arrive raw.
+var _netsim: NetSim = null
 
 
 ## Starts hosting on `port`. Returns OK or an ENet error; on success this peer is
@@ -130,6 +139,22 @@ func _push_input(data: Array) -> void:
 # --- Client side ------------------------------------------------------------
 
 
+## Installs a network-condition simulator on the snapshot intake (a debug aid for
+## exercising the smoothing under a worse link than the local machine provides).
+## Once set, received snapshots are held for `latency_ms` plus up to `jitter_ms`,
+## and a `loss` fraction is dropped, with `drain_snapshots` releasing the rest when
+## due. A no-op when left unset: snapshots arrive raw. Seeded for a reproducible run.
+func configure_netsim(latency_ms: float, jitter_ms: float, loss: float, rng_seed: int) -> void:
+	_netsim = NetSim.new(latency_ms, jitter_ms, loss, rng_seed)
+
+
+## Whether a network-condition simulator is installed. When true the client must
+## deliver snapshots through `drain_snapshots`; when false it buffers the latest
+## snapshot directly.
+func is_conditioned() -> bool:
+	return _netsim != null
+
+
 ## Sends this tick's intent up to the server, stamped with `seq` so the server can
 ## acknowledge it. A no-op before the handshake.
 func send_input(seq: int, command: InputCommand) -> void:
@@ -154,6 +179,24 @@ func latest_ack() -> int:
 	return _latest_snapshot.get("ack", -1)
 
 
+## Releases the snapshots whose conditioner hold has elapsed by `now_msec` and
+## returns them oldest first, each `{time: float, state: SimState}` where `time` is
+## the release time the caller stamps onto the interpolation buffer (so injected
+## latency and jitter read as real arrival timing). `_latest_snapshot` advances to
+## the newest released, so prediction reconciles against the same shaped stream.
+## Returns an empty array when no conditioner is installed — a raw client buffers
+## the latest snapshot directly and does not drain.
+func drain_snapshots(now_msec: float) -> Array:
+	var delivered: Array = []
+	if _netsim == null:
+		return delivered
+	for packet in _netsim.drain(now_msec):
+		_latest_snapshot = packet["data"]
+		var state := NetProtocol.decode_snapshot(packet["data"])
+		delivered.append({"time": packet["release"], "state": state})
+	return delivered
+
+
 func _on_connected_to_server() -> void:
 	_submit_hello.rpc_id(1, NetProtocol.PROTOCOL_VERSION)
 
@@ -170,4 +213,8 @@ func _reject(reason: String) -> void:
 
 @rpc("authority", "call_remote", "unreliable_ordered")
 func _push_snapshot(data: Dictionary) -> void:
-	_latest_snapshot = data
+	if _netsim != null:
+		# Hold the snapshot in the conditioner; `drain_snapshots` delivers it later.
+		_netsim.receive(data, Time.get_ticks_msec())
+	else:
+		_latest_snapshot = data
