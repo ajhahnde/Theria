@@ -11,12 +11,15 @@ extends Node2D
 ##   CLIENT — owns no authority: it samples local input, sends it up, and draws the
 ##            server's snapshots — but predicts its own hero locally from that input
 ##            so the hero responds without a round-trip, reconciling against every
-##            snapshot. Remote entities are drawn straight from the snapshot.
+##            snapshot. Remote entities are rendered a short delay in the past,
+##            interpolated between buffered snapshots, so they move smoothly through
+##            network jitter and dropped packets.
 ##
 ## All authority stays in SimCore; the transport lives in NetSession; the wire
-## shaping lives in NetProtocol. This node samples input, routes it, predicts the
-## client's own hero, and draws the resulting state — the same `_draw` serves every
-## mode.
+## shaping lives in NetProtocol; remote-entity smoothing lives in
+## SnapshotInterpolator. This node samples input, routes it, predicts the client's
+## own hero, interpolates the rest, and draws the resulting state — the same `_draw`
+## serves every mode.
 
 enum Mode { LOCAL, HOST, CLIENT }
 
@@ -26,6 +29,14 @@ const HERO_TEAM := 0
 const BOT_TEAM := 1
 
 const DEFAULT_JOIN_ADDRESS := "127.0.0.1"
+
+## CLIENT: how far in the past (milliseconds) remote entities are rendered. The
+## interpolator draws them between the snapshots bracketing this delayed time, so
+## the delay is the jitter/loss budget — at the 60 Hz snapshot rate it spans ~6
+## snapshots, enough that a late or dropped one is covered by its neighbours rather
+## than stalling the unit. Only remote entities pay it; our own hero is predicted to
+## the present, so the local player feels no added latency.
+const INTERPOLATION_DELAY_MS := 100.0
 
 const HERO_COLOR := Color(0.36, 0.66, 1.0)
 const BOT_COLOR := Color(1.0, 0.42, 0.38)
@@ -74,9 +85,12 @@ var _team1_peer: int = 0
 var _joined: bool = false
 ## CLIENT: the team the server assigned us; identifies our hero in a snapshot.
 var _my_team: int = BOT_TEAM
-## CLIENT: the predicted world to draw — the latest authoritative snapshot with
-## our own hero advanced by the inputs the server has not yet acknowledged.
+## CLIENT: the world to draw — remote entities interpolated a short delay in the
+## past, with our own hero overlaid at its predicted (present) position.
 var _client_state: SimState = null
+## CLIENT: buffers recent snapshots and renders remote entities interpolated
+## between them, smoothing network jitter and dropped packets.
+var _interp := SnapshotInterpolator.new()
 ## CLIENT: monotonic input sequence number, stamped on each input we send so the
 ## server can acknowledge it and we can match the ack back to a pending input.
 var _input_seq: int = 0
@@ -185,35 +199,72 @@ func _tick_host() -> void:
 
 
 ## Samples local input, sends it up stamped with a sequence number, buffers it as
-## pending, then redraws the predicted world. Prediction makes the local hero
-## respond immediately instead of waiting a round-trip for the server to echo it.
+## pending, feeds the latest snapshot to the interpolator, then rebuilds the world
+## to draw. Prediction makes the local hero respond immediately instead of waiting a
+## round-trip; interpolation makes the remote entities move smoothly despite jitter.
 func _tick_client() -> void:
 	if _joined:
 		_input_seq += 1
 		var command := _sample_player_input()
 		_net.send_input(_input_seq, command)
 		_pending_inputs.append({"seq": _input_seq, "input": command})
-	_client_state = _predicted_state()
+	_buffer_latest_snapshot()
+	_client_state = _render_state()
 
 
-## Reconciles against the latest snapshot and predicts our hero: take the
-## authoritative world, drop the inputs the server has already applied, and replay
-## the rest onto our hero with the same movement math the server runs. Authority is
-## never forked — every snapshot rolls our hero back to the server's truth before
-## the replay, so a misprediction self-corrects within a tick. Remote entities are
-## drawn straight from the snapshot (interpolation is a later slice).
-func _predicted_state() -> SimState:
+## Feeds the freshest authoritative snapshot into the interpolation buffer. The
+## interpolator ignores ticks it already holds, so polling the latest every frame is
+## safe — each distinct snapshot is buffered once with its arrival time. This decodes
+## its own copy; prediction decodes a separate one, so neither mutates the buffer.
+func _buffer_latest_snapshot() -> void:
+	var state := _net.latest_state()
+	if state != null:
+		_interp.push(state, Time.get_ticks_msec())
+
+
+## The world to draw: remote entities interpolated INTERPOLATION_DELAY_MS in the
+## past (smoothing jitter and absorbing dropped snapshots), with our own hero
+## overlaid at its predicted, present-time position. Authority is never forked —
+## both halves derive only from the server's snapshots. Null until the first
+## snapshot arrives.
+func _render_state() -> SimState:
+	var state := _interp.sample(Time.get_ticks_msec() - INTERPOLATION_DELAY_MS)
+	if state == null:
+		return null
+	_overlay_predicted_hero(state)
+	return state
+
+
+## Replaces our hero's interpolated (past) position in `state` with its predicted
+## present-time position, so only our hero escapes the interpolation delay while
+## every other entity stays smoothed.
+func _overlay_predicted_hero(state: SimState) -> void:
+	var predicted := _predicted_hero()
+	if predicted == null:
+		return
+	var hero := _local_hero(state)
+	if hero != null:
+		hero.position = predicted.position
+
+
+## Our hero reconciled against the latest snapshot: take its authoritative position,
+## drop the inputs the server has already applied, and replay the rest with the same
+## movement math the server runs. Authority is never forked — the snapshot rolls our
+## hero back to the server's truth before the replay, so a misprediction self-corrects
+## within a tick. Returns null before the first snapshot or if our hero is not in it.
+func _predicted_hero() -> SimEntity:
 	var state := _net.latest_state()
 	if state == null:
+		return null
+	var hero := _local_hero(state)
+	if hero == null:
 		return null
 	var ack := _net.latest_ack()
 	while not _pending_inputs.is_empty() and _pending_inputs[0]["seq"] <= ack:
 		_pending_inputs.pop_front()
-	var hero := _local_hero(state)
-	if hero != null:
-		for entry in _pending_inputs:
-			SimCore.apply_movement(hero, entry["input"])
-	return state
+	for entry in _pending_inputs:
+		SimCore.apply_movement(hero, entry["input"])
+	return hero
 
 
 ## Our hero in `state`: the one mobile, non-creep unit on our team. The walking
@@ -259,8 +310,8 @@ func _on_server_left() -> void:
 # --- Rendering --------------------------------------------------------------
 
 
-## The world this client should draw: the predicted state on a pure CLIENT, the
-## authoritative simulation otherwise.
+## The world this client should draw: the predicted + interpolated render state on a
+## pure CLIENT, the authoritative simulation otherwise.
 func _active_state() -> SimState:
 	return _client_state if _mode == Mode.CLIENT else _sim.state
 
@@ -280,8 +331,9 @@ func _draw_map() -> void:
 
 
 ## Draws the live world: towers and nexuses as squares, mobile units as circles,
-## each with an HP bar. Structures and units share one entity list, so they all
-## come straight from the authoritative state (local or received).
+## each with an HP bar. Structures and units share one entity list, so they all come
+## from one state — the authoritative simulation in LOCAL/HOST, the predicted +
+## interpolated render state on a CLIENT.
 func _draw_entities() -> void:
 	var state := _active_state()
 	if state == null:

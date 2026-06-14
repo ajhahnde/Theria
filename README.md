@@ -56,7 +56,9 @@ another driver — a listen-server — added without rewriting gameplay. The hos
 the sole authority. A client never owns authority, but it predicts its own hero
 locally so input feels instant, reconciling against every snapshot: it rolls back
 to the server's state and replays the inputs the server has not yet applied, using
-the same movement code the server runs. Remote units are drawn from the snapshot.
+the same movement code the server runs. Remote units — the enemy hero, creeps, and
+structures — are rendered a short delay in the past, interpolated between buffered
+snapshots, so they move smoothly through network jitter and dropped packets.
 
 ## Layout
 
@@ -64,7 +66,7 @@ the same movement code the server runs. Remote units are drawn from the snapshot
 | :------------- | :---------------------------------------------------- |
 | `src/sim`    | The authoritative simulation core and its data types. |
 | `src/bot`    | Bot input derived from the world state.               |
-| `src/net`    | Listen-server transport and the client/server wire protocol. |
+| `src/net`    | Listen-server transport, the client/server wire protocol, and remote-entity interpolation. |
 | `src/client` | Local input sampling and rendering.                   |
 | `test/unit`  | Headless tests of the simulation and the wire protocol. |
 | `scenes`     | Godot scenes.                                         |

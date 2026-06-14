@@ -50,3 +50,22 @@ func _init(
 	team = p_team
 	position = p_pos
 	move_speed = p_speed
+
+
+## Returns a field-for-field copy of this entity. The client's snapshot
+## interpolation uses it to build a render entity at an in-between position without
+## mutating the buffered authoritative snapshots it derives from.
+func clone() -> SimEntity:
+	var copy := SimEntity.new(id, team, position, move_speed)
+	copy.hp = hp
+	copy.max_hp = max_hp
+	copy.attack_damage = attack_damage
+	copy.attack_range = attack_range
+	copy.attack_cooldown_ticks = attack_cooldown_ticks
+	copy.cooldown = cooldown
+	copy.is_structure = is_structure
+	copy.is_nexus = is_nexus
+	copy.is_creep = is_creep
+	copy.lane = lane
+	copy.waypoint_index = waypoint_index
+	return copy

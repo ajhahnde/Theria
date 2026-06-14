@@ -40,6 +40,11 @@ protocol version.
   the prediction stays exactly on the authoritative path and self-corrects. Remote
   units are still drawn straight from the snapshot. The netcode protocol version
   advances to 2 (inputs now carry a sequence number and snapshots an acknowledgement).
+- Remote-entity interpolation: enemy heroes, creeps, and structures are now
+  rendered a short delay in the past, interpolated between buffered snapshots, so
+  they move smoothly instead of stuttering or snapping when packets arrive with
+  jitter or are dropped. The delay applies only to remote units; the joined
+  player's own hero is still predicted to the present and feels no added latency.
 - Combat heroes: the player's hero and the bot now auto-attack the nearest enemy
   in range, so a hero can clear creep waves, pressure towers, duel the enemy hero,
   and push a lane toward the nexus. Heroes spawn at their base fountain.
