@@ -107,6 +107,29 @@ func test_unit_ability_whiffs_on_an_out_of_range_target() -> void:
 	assert_eq(sim.state.get_entity(id).resource, 70, "but the whiffed cast still books its cost")
 
 
+# --- Unit target acquisition (the driver's cursor pick) ---------------------
+
+
+func test_pick_unit_target_returns_the_nearest_enemy() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var near := sim.add_entity(1, Vector2(100.0, 0.0), 0.0, 600)
+	sim.add_entity(1, Vector2(500.0, 0.0), 0.0, 600)
+	var picked := AbilityExecutor.pick_unit_target(sim.state, 0, Vector2(120.0, 0.0))
+	assert_eq(picked, near, "the enemy nearest the point is acquired")
+
+
+func test_pick_unit_target_ignores_allies_and_empties() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	sim.add_entity(0, Vector2(100.0, 0.0), 0.0, 600)  # an ally near the point
+	assert_eq(
+		AbilityExecutor.pick_unit_target(sim.state, 0, Vector2(100.0, 0.0)),
+		0,
+		"no enemy in the world acquires nothing, never an ally",
+	)
+
+
 # --- Effects: heal, transform -----------------------------------------------
 
 

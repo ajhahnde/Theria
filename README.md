@@ -83,7 +83,12 @@ godot --path .
 
 A connect screen opens: choose **Practice** for a single-machine match, **Host** to
 start a listen-server, or type an address and **Join** one. Move the hero with
-**WASD** or the **arrow keys**; the bot walks toward it.
+**WASD** or the **arrow keys**; the bot walks toward it. Cast its abilities with
+**1–4**, aimed at the mouse cursor — the hero shifts between a human and an animal
+form (shown by the ring around it, white or amber), each form a different set of
+abilities drawing on its own resource (the bar under the health bar). Abilities are
+cast in a single-machine or hosted match; a joined client moves but does not yet
+cast.
 
 ### Multiplayer
 

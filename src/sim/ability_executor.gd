@@ -94,6 +94,25 @@ static func _landing_point(caster: SimEntity, spec: AbilitySpec, command: InputC
 	return caster.position + dir * minf(spec.range, dist)
 
 
+## The id of the living enemy nearest `point` — a unit-targeted ability's target
+## acquisition for a cursor or click, picked by the caster's driver and validated by
+## `execute` against the ability's range. 0 when the caster's enemies hold no living
+## unit. Pure: a function of the world, the caster's team, and the point, so a bot
+## and the client pick the same lock.
+static func pick_unit_target(state: SimState, caster_team: int, point: Vector2) -> int:
+	var best_id := 0
+	var best_dist := INF
+	for id in state.entities:
+		var e: SimEntity = state.entities[id]
+		if e.team == caster_team or e.max_hp <= 0:
+			continue
+		var d := point.distance_to(e.position)
+		if d < best_dist:
+			best_dist = d
+			best_id = id
+	return best_id
+
+
 ## Every living enemy of `caster` within `radius` of `center`, in deterministic
 ## insertion order.
 static func _enemies_in_area(

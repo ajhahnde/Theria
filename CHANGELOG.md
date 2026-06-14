@@ -35,6 +35,12 @@ protocol version.
 
 ### Added
 
+- Ability controls: the player now casts the hero's abilities with the **1–4** keys,
+  aimed at the mouse cursor, and shifts the hero between its human and animal form to
+  wield each form's distinct set. The hero shows its current form (a ring around it)
+  and its resource pool (a bar under the health bar) as it casts and transforms.
+  Abilities are cast in a single-machine or hosted match; a joined client moves but
+  does not yet cast (networked casting follows with the protocol that carries it).
 - A data-driven hero ability layer for Theria's shapeshifters. Every hero carries
   two kits — a human form and an animal form — and transforms between them, each
   form metering its own resource pool with separate cooldowns that keep running

@@ -71,6 +71,26 @@ const CREEP_HP_BAR_OFFSET := Vector2(-35.0, -55.0)
 const HP_BAR_BG := Color(0.0, 0.0, 0.0, 0.6)
 const HP_BAR_FG := Color(0.4, 0.85, 0.4)
 
+## The proving kit every hero is equipped with for v0.1 (see AbilityData). The
+## distinct per-Volk kits replace it once the roster is authored.
+const HERO_KIT := "wildkin"
+
+## Ability bar keys, one per slot (0..3). Movement owns WASD/arrows, so the four
+## abilities sit on the number row rather than QWER. A held key recasts the slot as
+## soon as its cooldown and resource allow (quick-cast).
+const ABILITY_KEYS: Array[Key] = [KEY_1, KEY_2, KEY_3, KEY_4]
+
+## Resource bar, drawn just under a hero's HP bar, and the form ring around a hero —
+## white while human, amber while shifted to the animal form.
+const RES_BAR_SIZE := Vector2(160.0, 14.0)
+const RES_BAR_OFFSET := Vector2(-80.0, -118.0)
+const RES_BAR_BG := Color(0.0, 0.0, 0.0, 0.6)
+const RES_BAR_FG := Color(0.35, 0.6, 0.95)
+const FORM_RING_WIDTH := 6.0
+const FORM_RING_GAP := 6.0
+const HUMAN_RING_COLOR := Color(0.95, 0.95, 0.95)
+const ANIMAL_RING_COLOR := Color(1.0, 0.62, 0.2)
+
 var _mode: int = Mode.LOCAL
 var _join_address := DEFAULT_JOIN_ADDRESS
 
@@ -252,6 +272,10 @@ func _start_local() -> void:
 	_sim.spawn_structures()
 	_hero_id = _sim.add_hero(HERO_TEAM, MapData.spawn_for_team(HERO_TEAM), HERO_SPEED)
 	_bot_id = _sim.add_hero(BOT_TEAM, MapData.spawn_for_team(BOT_TEAM), BOT_SPEED)
+	# Both heroes carry the kit so the match starts mirror-fair; the bot does not yet
+	# cast (its controller drives movement only), but it shows its form and resource.
+	_sim.equip_kit(_hero_id, HERO_KIT)
+	_sim.equip_kit(_bot_id, HERO_KIT)
 
 
 func _start_host() -> void:
@@ -472,6 +496,9 @@ func _draw_entities() -> void:
 		else:
 			draw_circle(entity.position, ENTITY_RADIUS, _team_color(entity.team))
 			_draw_hp_bar(entity, HP_BAR_SIZE, HP_BAR_OFFSET)
+			if entity.is_hero:
+				_draw_form_ring(entity)
+				_draw_resource_bar(entity)
 
 
 func _draw_hp_bar(entity: SimEntity, size: Vector2, offset: Vector2) -> void:
@@ -481,6 +508,26 @@ func _draw_hp_bar(entity: SimEntity, size: Vector2, offset: Vector2) -> void:
 	var top_left := entity.position + offset
 	draw_rect(Rect2(top_left, size), HP_BAR_BG, true)
 	draw_rect(Rect2(top_left, Vector2(size.x * frac, size.y)), HP_BAR_FG, true)
+
+
+## A ring around a hero whose colour reads its active shapeshifter form — white
+## while human, amber once shifted to the animal form. Drawn just outside the hero
+## circle so it never hides the team colour.
+func _draw_form_ring(entity: SimEntity) -> void:
+	var color := ANIMAL_RING_COLOR if entity.form == AbilitySpec.FORM_ANIMAL else HUMAN_RING_COLOR
+	draw_arc(entity.position, ENTITY_RADIUS + FORM_RING_GAP, 0.0, TAU, 48, color, FORM_RING_WIDTH)
+
+
+## A hero's resource pool as a bar under its HP bar. Nothing is drawn for an entity
+## with no pool (an unequipped hero, or a snapshot-decoded one — the resource is not
+## carried over the wire).
+func _draw_resource_bar(entity: SimEntity) -> void:
+	if entity.resource_max <= 0:
+		return
+	var frac := clampf(float(entity.resource) / float(entity.resource_max), 0.0, 1.0)
+	var top_left := entity.position + RES_BAR_OFFSET
+	draw_rect(Rect2(top_left, RES_BAR_SIZE), RES_BAR_BG, true)
+	draw_rect(Rect2(top_left, Vector2(RES_BAR_SIZE.x * frac, RES_BAR_SIZE.y)), RES_BAR_FG, true)
 
 
 func _team_color(team: int) -> Color:
@@ -499,4 +546,31 @@ func _sample_player_input() -> InputCommand:
 	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
 		dir.x += 1.0
 	command.move_dir = dir
+	_sample_ability(command)
 	return command
+
+
+## Layers ability-cast intent onto a movement command. Only with a local
+## authoritative simulation (LOCAL/HOST): a pure CLIENT samples no abilities, since
+## the wire carries movement alone and networked casting is a later, protocol-
+## versioned step. The pressed slot keys the cast; the cursor is the aim point a
+## skillshot or ground ability uses, and the enemy nearest the cursor is the lock a
+## unit-targeted ability uses — the simulation reads whichever the cast ability needs.
+func _sample_ability(command: InputCommand) -> void:
+	if _sim == null:
+		return
+	var slot := _pressed_ability_slot()
+	if slot < 0:
+		return
+	var aim := get_global_mouse_position()
+	command.ability_slot = slot
+	command.target_point = aim
+	command.target_id = AbilityExecutor.pick_unit_target(_sim.state, HERO_TEAM, aim)
+
+
+## The bar slot of the first held ability key (0..3), or -1 if none is down.
+func _pressed_ability_slot() -> int:
+	for slot in ABILITY_KEYS.size():
+		if Input.is_physical_key_pressed(ABILITY_KEYS[slot]):
+			return slot
+	return -1
