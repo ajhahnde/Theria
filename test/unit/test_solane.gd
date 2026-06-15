@@ -1,5 +1,5 @@
 extends GutTest
-## Data checks on the Solane roster — the first Volk's three hero kits (Lion, Cheetah,
+## Data checks on the Solane roster — the first tribe's three hero kits (Lion, Cheetah,
 ## Hyena). The ability executor itself is proven by test_ability.gd against the wildkin
 ## kit; these tests prove the *content* is wired correctly: the right ability sits in
 ## the right slot and form, the tuned numbers land, the transforms flip, and the three

@@ -1,5 +1,5 @@
 extends GutTest
-## Data checks on the Verdani roster — the second Volk's three hero kits (Snake, Spider,
+## Data checks on the Verdani roster — the second tribe's three hero kits (Snake, Spider,
 ## Chameleon), the jungle foil to the Solane. The executor itself is proven by
 ## test_ability.gd; these tests prove the *content*: the right ability sits in the right
 ## slot and form, the tuned numbers land, the transforms flip, the three economies are
@@ -70,7 +70,7 @@ func test_verdani_kits_use_disjoint_ability_ids() -> void:
 
 
 func test_verdani_ids_are_clear_of_the_solane() -> void:
-	# Both Volk are on the field at once in a practice match, so their catalog ids must
+	# Both tribes are on the field at once in a practice match, so their catalog ids must
 	# not collide — a Solane id and a Verdani id resolving to one row would cross-wire
 	# the two rosters.
 	var sim := SimCore.new()
@@ -111,7 +111,7 @@ func test_spider_web_nest_zones_the_widest_area() -> void:
 	sim.spawn_creeps = false
 	var id := _verdani_animal(sim, "spider", 0, Vector2.ZERO)
 	sim.state.get_entity(id).attack_damage = 0  # isolate Web Nest from the auto-attack
-	# Web Nest: GROUND, range 340, radius 220 — the widest in either Volk. Land it at
+	# Web Nest: GROUND, range 340, radius 220 — the widest in either tribe. Land it at
 	# (300,0) and bracket an enemy just inside the radius against one just outside.
 	var inside := sim.add_entity(1, Vector2(300.0, 210.0), 0.0, 600)  # 210 from centre -> hit
 	var outside := sim.add_entity(1, Vector2(300.0, 235.0), 0.0, 600)  # 235 from centre -> spared
@@ -134,7 +134,7 @@ func test_chameleon_ambush_is_the_heaviest_single_hit() -> void:
 	cast.target_id = enemy
 	sim.step({id: cast})
 	assert_eq(
-		sim.state.get_entity(enemy).hp, 435, "Ambush deals its 165 — the hardest hit in either Volk"
+		sim.state.get_entity(enemy).hp, 435, "Ambush deals its 165 — the hardest hit in either tribe"
 	)
 	assert_eq(sim.state.get_entity(id).resource, 35, "and spends its 35 from the lean 70 pool")
 

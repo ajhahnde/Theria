@@ -72,14 +72,14 @@ const CREEP_HP_BAR_OFFSET := Vector2(-35.0, -55.0)
 const HP_BAR_BG := Color(0.0, 0.0, 0.0, 0.6)
 const HP_BAR_FG := Color(0.4, 0.85, 0.4)
 
-## The Volk the player's team falls back to in a LOCAL practice match when `--hero`
-## names no known hero. The rosters themselves live in `AbilityData.VOLK` — the single
-## source of which heroes form which Volk — and `_start_local` seats the player's chosen
-## Volk against the opposing one, so the match exercises both rosters and all four
+## The tribe the player's team falls back to in a LOCAL practice match when `--hero`
+## names no known hero. The rosters themselves live in `AbilityData.TRIBE` — the single
+## source of which heroes form which tribe — and `_start_local` seats the player's chosen
+## tribe against the opposing one, so the match exercises both rosters and all four
 ## targeting modes. HOST/CLIENT still seat the one-per-team duel (DUEL_KIT below): the
 ## wire identifies a hero by its team, so a networked squad waits on the protocol step
 ## that gives each client a controlled-entity id.
-const DEFAULT_VOLK := "solane"
+const DEFAULT_TRIBE := "solane"
 
 ## The kit both heroes mirror in a HOST/CLIENT duel — the one-per-team walking
 ## skeleton the netcode is built around until the multi-hero wire step lands.
@@ -127,11 +127,11 @@ var _bot := BotController.new()
 var _hero_id: int = 0
 var _bot_id: int = 0
 
-## LOCAL: the hero the player drives, from `--hero` — any hero of either Volk. Its
-## Volk fills the player's team and the opposing Volk the bot team, so the choice also
-## picks the match-up. Falls back to the first hero of the default Volk if unset or
+## LOCAL: the hero the player drives, from `--hero` — any hero of either tribe. Its
+## tribe fills the player's team and the opposing tribe the bot team, so the choice also
+## picks the match-up. Falls back to the first hero of the default tribe if unset or
 ## unrecognised. Ignored by HOST/CLIENT, which seat the duel.
-var _player_hero: String = AbilityData.VOLK[DEFAULT_VOLK][0]
+var _player_hero: String = AbilityData.TRIBE[DEFAULT_TRIBE][0]
 ## LOCAL: every bot-driven hero this match — the player's two squadmates and the
 ## three opponents — each stepped from its own BotController decision.
 var _bot_ids: Array[int] = []
@@ -290,23 +290,23 @@ func _close_menu_and_enter() -> void:
 	_enter_match()
 
 
-## Practice: a Volk-vs-Volk match. `--hero` names the hero the player drives; that
-## hero's Volk (per `AbilityData.VOLK`) fills the player's team and the opposing Volk the
+## Practice: a tribe-vs-tribe match. `--hero` names the hero the player drives; that
+## hero's tribe (per `AbilityData.TRIBE`) fills the player's team and the opposing tribe the
 ## bot team, one hero per roster kit. The player drives the matching seat; the other five
 ## are bot-driven, so both rosters are on the field at once. An unknown name falls back
-## to the default Volk's first hero, so a typo starts a valid match instead of crashing.
+## to the default tribe's first hero, so a typo starts a valid match instead of crashing.
 func _start_local() -> void:
 	_sim = _new_world()
-	var player_volk := AbilityData.volk_of(_player_hero)
-	if player_volk == "":
-		var fallback: String = AbilityData.VOLK[DEFAULT_VOLK][0]
+	var player_tribe := AbilityData.tribe_of(_player_hero)
+	if player_tribe == "":
+		var fallback: String = AbilityData.TRIBE[DEFAULT_TRIBE][0]
 		push_warning("unknown --hero %s; defaulting to %s" % [_player_hero, fallback])
 		_player_hero = fallback
-		player_volk = DEFAULT_VOLK
+		player_tribe = DEFAULT_TRIBE
 	var player_roster: Array[String] = []
-	player_roster.assign(AbilityData.VOLK[player_volk])
+	player_roster.assign(AbilityData.TRIBE[player_tribe])
 	var bot_roster: Array[String] = []
-	bot_roster.assign(AbilityData.VOLK[AbilityData.opposing_volk(player_volk)])
+	bot_roster.assign(AbilityData.TRIBE[AbilityData.opposing_tribe(player_tribe)])
 	_seat_squad(HERO_TEAM, HERO_SPEED, player_roster, player_roster.find(_player_hero))
 	_seat_squad(BOT_TEAM, BOT_SPEED, bot_roster, -1)
 

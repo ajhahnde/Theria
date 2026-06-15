@@ -35,13 +35,13 @@ protocol version.
 
 ### Added
 
-- A practice match is now a Volk-versus-Volk choice: `--hero` accepts any hero of either
-  Volk, and the chosen hero's Volk fields the player's team while the opposing Volk fills
+- A practice match is now a tribe-versus-tribe choice: `--hero` accepts any hero of either
+  tribe, and the chosen hero's tribe fields the player's team while the opposing tribe fills
   the bots — so the Verdani are now playable, not just an opponent. The default still
-  seats the Solane against the Verdani. Which heroes form which Volk is recorded once in
+  seats the Solane against the Verdani. Which heroes form which tribe is recorded once in
   the ability catalog and read by the client, so the rosters cannot drift apart.
 - A second hero roster, the **Verdani** — jungle venom-and-shadow shifters (snake,
-  spider, chameleon) — joins the Solane as the opposing Volk, authored on the same
+  spider, chameleon) — joins the Solane as the opposing tribe, authored on the same
   ability primitives as a deliberate foil: the snake is a venom striker with the
   longest single-target lock, the spider a trapper laying the widest, lowest-power
   ground webs, and the chameleon an ambusher carrying the single heaviest hit of either
@@ -64,7 +64,7 @@ protocol version.
   one (the Lion by default, or `--hero cheetah`/`--hero hyena`) and bots drive the rest.
   A hosted or joined match stays a one-hero-per-team duel until multi-hero play reaches
   the wire.
-- The first roster of distinct heroes — the **Solane**, a Volk of savanna big-cat
+- The first roster of distinct heroes — the **Solane**, a tribe of savanna big-cat
   shifters: a **Lion** frontline bruiser (short-range pokes, a heavy melee strike, and
   the deepest self-sustain), a **Cheetah** burst skirmisher (long-range pokes and a
   fast, repeatable single-target shred), and a **Hyena** zone controller (the widest

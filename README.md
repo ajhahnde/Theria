@@ -86,9 +86,9 @@ godot --path .
 ```
 
 A connect screen opens: choose **Practice** for a single-machine match, **Host** to
-start a listen-server, or type an address and **Join** one. Practice is a Volk-vs-Volk
-match: `--hero` names the hero you drive — any hero of either Volk — and that hero's
-Volk fields your team while the opposing Volk fills the bots, so `--hero snake` puts you
+start a listen-server, or type an address and **Join** one. Practice is a tribe-vs-tribe
+match: `--hero` names the hero you drive — any hero of either tribe — and that hero's
+tribe fields your team while the opposing tribe fills the bots, so `--hero snake` puts you
 on the Verdani against the Solane, and the default lion keeps the Solane against the
 Verdani. Bots drive the other five seats. A hosted or joined match is still a
 one-hero-per-team duel on the lion until multi-hero play

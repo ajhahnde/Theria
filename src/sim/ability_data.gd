@@ -10,7 +10,7 @@ extends RefCounted
 ## whole catalog — all four targeting modes, the three effects, a per-form resource,
 ## and the human/animal transform. It stays as the reference the schema tests drive.
 ##
-## The first Volk's roster is authored on top of it: the **Solane** — savanna big-cat
+## The first tribe's roster is authored on top of it: the **Solane** — savanna big-cat
 ## shifters. Three mirror heroes, each a human kit plus an animal kit, built
 ## from the same DAMAGE/HEAL/TRANSFORM primitives but given distinct identities through
 ## their targeting mix, their tuning, and their resource economy:
@@ -21,17 +21,17 @@ extends RefCounted
 ##   - **Hyena**   — a zone controller: the widest ground areas in both forms for
 ##                   attrition, on a baseline pool.
 ##
-## The opposing Volk, the **Verdani** — jungle venom-and-shadow shifters — is authored
+## The opposing tribe, the **Verdani** — jungle venom-and-shadow shifters — is authored
 ## on the same primitives, a deliberate foil to the Solane archetypes:
 ##   - **Snake**     — a venom striker: a long single-target lock, a cheap low-cooldown
 ##                     Fang Strike, and a heavy Venom Coil payoff, on a mid-tier pool.
 ##   - **Spider**    — a trapper: the longest, widest, lowest-power ground webs in the
 ##                     game for pure attrition, on the deepest, slowest-regen pool.
 ##   - **Chameleon** — an ambusher: a short hard skillshot and the single heaviest hit
-##                     in either Volk, on the leanest, fastest-refilling pool.
+##                     in either tribe, on the leanest, fastest-refilling pool.
 ## In a practice match the player's squad fields the Solane and the bot squad the
 ## Verdani, so both rosters and all four targeting modes are exercised at once. The two
-## Volk are still effect-mirrors (DAMAGE/HEAL/TRANSFORM); the venom/web flavor is carried
+## tribes are still effect-mirrors (DAMAGE/HEAL/TRANSFORM); the venom/web flavor is carried
 ## by their targeting mix, tuning, and economy until a richer effect schema lands.
 
 ## Ability rows keyed by catalog id. Each row is parsed on demand into a typed
@@ -141,7 +141,7 @@ const ABILITIES := {
 		"cost": 35,
 		"cooldown_ticks": 150,
 		"effect": AbilitySpec.EFFECT_HEAL,
-		"power": 150,  # the deepest heal in the Volk: the bruiser's staying power
+		"power": 150,  # the deepest heal in the tribe: the bruiser's staying power
 	},
 	12:
 	{
@@ -180,7 +180,7 @@ const ABILITIES := {
 		"cost": 35,
 		"cooldown_ticks": 48,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 160,  # the hardest single hit in the Volk
+		"power": 160,  # the hardest single hit in the tribe
 	},
 	15:
 	{
@@ -201,7 +201,7 @@ const ABILITIES := {
 		"form": AbilitySpec.FORM_HUMAN,
 		"slot": 0,
 		"target_kind": AbilitySpec.TARGET_SKILLSHOT,
-		"range": 750.0,  # the longest reach in the Volk
+		"range": 750.0,  # the longest reach in the tribe
 		"radius": 50.0,  # but a tight line: it must be aimed
 		"cost": 20,
 		"cooldown_ticks": 24,
@@ -241,7 +241,7 @@ const ABILITIES := {
 		"target_kind": AbilitySpec.TARGET_UNIT,
 		"range": 280.0,
 		"cost": 15,
-		"cooldown_ticks": 18,  # the shortest cooldown in the Volk: harass on repeat
+		"cooldown_ticks": 18,  # the shortest cooldown in the tribe: harass on repeat
 		"effect": AbilitySpec.EFFECT_DAMAGE,
 		"power": 70,
 	},
@@ -329,7 +329,7 @@ const ABILITIES := {
 		"slot": 2,
 		"target_kind": AbilitySpec.TARGET_GROUND,
 		"range": 320.0,
-		"radius": 210.0,  # the widest area in the Volk
+		"radius": 210.0,  # the widest area in the tribe
 		"cost": 35,
 		"cooldown_ticks": 44,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
@@ -392,7 +392,7 @@ const ABILITIES := {
 		"form": AbilitySpec.FORM_ANIMAL,
 		"slot": 0,
 		"target_kind": AbilitySpec.TARGET_UNIT,
-		"range": 360.0,  # the longest single-target lock in either Volk
+		"range": 360.0,  # the longest single-target lock in either tribe
 		"cost": 15,
 		"cooldown_ticks": 18,  # cheap and fast: harass on repeat
 		"effect": AbilitySpec.EFFECT_DAMAGE,
@@ -435,7 +435,7 @@ const ABILITIES := {
 		"cost": 30,
 		"cooldown_ticks": 38,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 50,  # the lowest per-hit power in either Volk: pure attrition
+		"power": 50,  # the lowest per-hit power in either tribe: pure attrition
 	},
 	51:
 	{
@@ -482,7 +482,7 @@ const ABILITIES := {
 		"slot": 2,
 		"target_kind": AbilitySpec.TARGET_GROUND,
 		"range": 340.0,
-		"radius": 220.0,  # the widest area in either Volk
+		"radius": 220.0,  # the widest area in either tribe
 		"cost": 35,
 		"cooldown_ticks": 46,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
@@ -563,7 +563,7 @@ const ABILITIES := {
 		"cost": 35,
 		"cooldown_ticks": 52,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 165,  # the single heaviest hit in either Volk
+		"power": 165,  # the single heaviest hit in either tribe
 	},
 	65:
 	{
@@ -599,7 +599,7 @@ const KITS := {
 			AbilitySpec.FORM_ANIMAL: {0: 4, 2: 5, 3: 6},
 		},
 	},
-	# --- Solane (savanna big-cats), the v0.1 mirror Volk ---------------------
+	# --- Solane (savanna big-cats), the v0.1 mirror tribe ---------------------
 	"lion":
 	{
 		# A bruiser: a generous pool that spends slowly, to back the deep heal and
@@ -644,7 +644,7 @@ const KITS := {
 			AbilitySpec.FORM_ANIMAL: {0: 33, 2: 34, 3: 35},
 		},
 	},
-	# --- Verdani (jungle venom-and-shadow), the opposing Volk ----------------
+	# --- Verdani (jungle venom-and-shadow), the opposing tribe ----------------
 	"snake":
 	{
 		# A striker: a precise mid-tier pool, between the Cheetah's lean and the
@@ -678,7 +678,7 @@ const KITS := {
 	"chameleon":
 	{
 		# An ambusher: the leanest pool on the fastest regen, to land a burst and
-		# refill for the next one — the most boom-and-bust economy of either Volk.
+		# refill for the next one — the most boom-and-bust economy of either tribe.
 		"resource":
 		{
 			AbilitySpec.FORM_HUMAN: {"max": 70, "regen_ticks": 7},
@@ -693,12 +693,12 @@ const KITS := {
 }
 
 
-## The Völker: each Volk's hero roster, in seating order. The single source of which
-## heroes form which Volk — the client reads it to seat a Volk-vs-Volk match, and the
+## The tribes: each tribe's hero roster, in seating order. The single source of which
+## heroes form which tribe — the client reads it to seat a tribe-vs-tribe match, and the
 ## roster order fixes each hero's squad slot. The wildkin reference kit is deliberately
-## in no Volk. v0.1 ships two Völker; a match pairs one against another (see
-## `opposing_volk`).
-const VOLK := {
+## in no tribe. v0.1 ships two tribes; a match pairs one against another (see
+## `opposing_tribe`).
+const TRIBE := {
 	"solane": ["lion", "cheetah", "hyena"],
 	"verdani": ["snake", "spider", "chameleon"],
 }
@@ -720,20 +720,20 @@ static func kit(kit_id: String) -> Dictionary:
 	return KITS.get(kit_id, {})
 
 
-## The Volk a hero kit belongs to, or "" if the kit is in no Volk (the wildkin reference
+## The tribe a hero kit belongs to, or "" if the kit is in no tribe (the wildkin reference
 ## kit, or an unknown name). A pure lookup over the roster data.
-static func volk_of(kit_id: String) -> String:
-	for volk in VOLK:
-		if (VOLK[volk] as Array).has(kit_id):
-			return volk
+static func tribe_of(kit_id: String) -> String:
+	for tribe in TRIBE:
+		if (TRIBE[tribe] as Array).has(kit_id):
+			return tribe
 	return ""
 
 
-## The Volk a given Volk is matched against — the next other Volk in declaration order.
-## v0.1 fields exactly two, so this is simply "the other one"; returns `volk` itself if
-## it is the only Volk defined.
-static func opposing_volk(volk: String) -> String:
-	for other in VOLK:
-		if other != volk:
+## The tribe a given tribe is matched against — the next other tribe in declaration order.
+## v0.1 fields exactly two, so this is simply "the other one"; returns `tribe` itself if
+## it is the only tribe defined.
+static func opposing_tribe(tribe: String) -> String:
+	for other in TRIBE:
+		if other != tribe:
 			return other
-	return volk
+	return tribe
