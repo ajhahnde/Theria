@@ -26,6 +26,10 @@ protocol version.
 
 ### Changed
 
+- The follow-camera now eases to the hero instead of locking to it 1:1, so a sharp turn or a
+  respawn glides the view rather than snapping it; and while the hero is gone (dead, or not yet
+  spawned) the camera rests where the hero last stood instead of jumping to the arena centre.
+  Presentation only.
 - Controls now follow the MOBA standard: move the hero by **right-clicking** the ground
   (click-to-move, hold and drag to keep steering) and cast abilities with **Q · W · E · R**,
   in place of driving with WASD and casting on the number row. The click destination is

@@ -79,6 +79,12 @@ const LIGHT_ENERGY := 1.1
 const CAM_HEIGHT := 880.0
 const CAM_BACK := 370.0
 
+## How far the camera closes the gap to its target each tick (0..1) — a smooth trail rather
+## than a hard 1:1 lock, so a direction change eases instead of snapping the whole view. At
+## 60 Hz, 0.2/tick settles in ~0.25 s: tight enough to stay on the hero, soft enough to take
+## the jerk out of a sharp turn or a respawn. Eyeball-tunable alongside the height/back above.
+const CAM_LERP := 0.2
+
 ## Billboarded HP/resource bars + status label floating above a unit (world units). A hero's
 ## HP bar floats HERO_BAR_GAP above its own model's measured top (animals vary in height),
 ## the resource bar a step below and the status label a step above; creeps/structures fixed.
@@ -180,6 +186,13 @@ var _pending_inputs: Array[Dictionary] = []
 ## hp_fg, res_node?, res_fg?, status?}` — so a unit's nodes are built once, never rebuilt
 ## while it lives. Filled in `_build_world` / `_sync_world`; see the presentation region.
 var _camera: Camera3D = null
+## The field point the camera trails. Set to the hero each tick it exists and held at its
+## last value while the hero is gone (dead, pre-spawn), so the view eases to a rest on the
+## last sighting instead of snapping to the arena centre. Seeded at the arena centre.
+var _cam_target: Vector2 = Vector2.ZERO
+## False until the camera has been placed once: the first placement snaps (no glide-in from
+## the world origin), every one after eases toward the target by CAM_LERP.
+var _cam_ready: bool = false
 var _ground: MeshInstance3D = null
 var _views: Dictionary = {}
 
@@ -616,7 +629,8 @@ func _build_world() -> void:
 	_camera.far = 20000.0
 	_camera.current = true
 	add_child(_camera)
-	_point_camera(MapData.BOUNDS.get_center())
+	_cam_target = MapData.BOUNDS.get_center()
+	_point_camera(_cam_target)
 	_player_input = PlayerInput.new(_camera)
 	_move_marker = MoveMarker.new()
 	add_child(_move_marker)
@@ -651,18 +665,25 @@ func _sync_world() -> void:
 	_follow_camera(state)
 
 
-## Trails the camera on the player's hero — a fixed height and pitch following it around
-## the field. With no hero yet (none spawned, or absent from a snapshot) it holds the
-## arena centre, so the menu backdrop and a spectating client still frame sensibly.
+## Trails the camera on the player's hero — a fixed height and pitch, eased toward it each
+## tick (CAM_LERP) rather than locked, so the view glides. With no hero (none spawned yet,
+## or gone from a snapshot) the target holds its last value, so the camera rests where the
+## hero last stood instead of jumping to the arena centre; seeded there for the menu backdrop.
 func _follow_camera(state: SimState) -> void:
 	var hero := _camera_focus(state)
-	_point_camera(hero.position if hero != null else MapData.BOUNDS.get_center())
+	if hero != null:
+		_cam_target = hero.position
+	_point_camera(_cam_target)
 
 
-## Places the camera above and behind a field point, looking down at it.
+## Eases the camera toward a pose above and behind a field point, looking down at it. The
+## first placement snaps; each tick after closes CAM_LERP of the remaining gap, so the view
+## trails smoothly. look_at always aims at the live focus, so the hero stays framed mid-glide.
 func _point_camera(focus: Vector2) -> void:
 	var ground := _world(focus)
-	_camera.position = ground + Vector3(0.0, CAM_HEIGHT, CAM_BACK)
+	var goal := ground + Vector3(0.0, CAM_HEIGHT, CAM_BACK)
+	_camera.position = goal if not _cam_ready else _camera.position.lerp(goal, CAM_LERP)
+	_cam_ready = true
 	_camera.look_at(ground)
 
 
