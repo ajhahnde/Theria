@@ -240,6 +240,8 @@ func _step_creeps() -> void:
 		var creep: SimEntity = state.entities[id]
 		if not creep.is_creep:
 			continue
+		if creep.is_stunned():
+			continue  # a stunned creep holds its ground — no march this tick
 		if _nearest_enemy_in_range(creep) != null:
 			continue
 		var path := MapData.lane_path(creep.lane, creep.team)
@@ -260,8 +262,9 @@ func _step_creeps() -> void:
 ## Ages every active status by one tick and applies a venom DOT's bite. For each
 ## entity carrying a status: a DOT advances its interval counter and, on each interval,
 ## subtracts its damage; every status counts its duration down and is dropped when it
-## expires. A SLOW does nothing here — movement reads the live slow off the entity each
-## tick — it only ages out. Runs before the cast step (upkeep first, like resource
+## expires. A SLOW and a STUN do nothing here — the movement, cast, and combat steps read
+## the live status off the entity each tick — they only age out. Runs before the cast step
+## (upkeep first, like resource
 ## regen) so a status applied this tick begins aging next tick, and before
 ## `_resolve_deaths` so a lethal DOT, an auto-attack, and an ability all reconcile in
 ## the one death pass. Pure and insertion-ordered over entities and each entity's
@@ -351,6 +354,8 @@ func _step_combat() -> void:
 		var attacker: SimEntity = state.entities[id]
 		if attacker.attack_damage <= 0:
 			continue
+		if attacker.is_stunned():
+			continue  # a locked unit neither strikes nor ticks its cooldown down
 		if attacker.cooldown > 0:
 			attacker.cooldown -= 1
 		if attacker.cooldown > 0:

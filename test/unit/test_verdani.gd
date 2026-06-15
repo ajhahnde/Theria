@@ -123,10 +123,10 @@ func test_spider_web_nest_zones_the_widest_area() -> void:
 	cast.ability_slot = 2  # animal E = Web Nest
 	cast.target_point = Vector2(300.0, 0.0)
 	sim.step({id: cast})
-	assert_eq(sim.state.get_entity(inside).hp, 550, "an enemy in the wide nest takes Web Nest's 50")
+	assert_eq(sim.state.get_entity(inside).hp, 565, "an enemy in the wide nest takes Web Nest's 35")
 	assert_true(
-		sim.state.get_entity(inside).statuses.has(AbilitySpec.STATUS_SLOW),
-		"and is snared by the web's slow",
+		sim.state.get_entity(inside).statuses.has(AbilitySpec.STATUS_STUN),
+		"and is locked by the web's hard stun",
 	)
 	assert_eq(sim.state.get_entity(outside).hp, 600, "an enemy beyond its 220 radius is spared")
 

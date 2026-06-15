@@ -26,16 +26,18 @@ extends RefCounted
 ##   - **Snake**     — a venom striker: a long single-target lock, a cheap low-cooldown
 ##                     Fang Strike, and a heavy Venom Coil payoff, on a mid-tier pool.
 ##   - **Spider**    — a trapper: the longest, widest, lowest-power ground webs in the
-##                     game for pure attrition, on the deepest, slowest-regen pool.
+##                     game — a long snaring slow and a brief hard lock — on the deepest,
+##                     slowest-regen pool.
 ##   - **Chameleon** — an ambusher: a short hard skillshot and the single heaviest hit
 ##                     in either tribe, on the leanest, fastest-refilling pool.
 ## In a practice match the player's squad fields the Solane and the bot squad the
 ## Verdani, so both rosters and all four targeting modes are exercised at once. The
 ## Verdani's venom and web are now mechanical, not just named: their striking abilities
 ## carry a lingering status (see AbilitySpec.STATUS_*) — venom is a damage-over-time, web
-## a movement slow — so the bite keeps biting and the snare actually snares. Each venom
-## ability trades part of its instant power for that lingering bite, so the Verdani lean
-## attrition where the Solane stay burst.
+## a movement slow, and the Spider's nest a brief hard stun — so the bite keeps biting,
+## the snare actually snares, and the nest locks. Each such ability trades part of its
+## instant power for that lingering effect, so the Verdani lean attrition and control
+## where the Solane stay burst.
 
 ## Ability rows keyed by catalog id. Each row is parsed on demand into a typed
 ## AbilitySpec by `spec`; a sparse row leans on the spec defaults. The dictionary's
@@ -506,12 +508,11 @@ const ABILITIES := {
 		"range": 340.0,
 		"radius": 220.0,  # the widest area in either tribe
 		"cost": 35,
-		"cooldown_ticks": 46,
+		"cooldown_ticks": 60,  # a longer recharge: a hard lock is a deliberate engage, not spam
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 50,  # a touch lighter, the nest now also snares the zone
-		"status": AbilitySpec.STATUS_SLOW,  # web: a shorter, wider slow than the snare
-		"status_power": 30,  # a 30% slow
-		"status_duration": 90,
+		"power": 35,  # trimmed hard — the nest's payoff is now the lock, not the hit
+		"status": AbilitySpec.STATUS_STUN,  # web: a brief hard lock (no move, cast, or attack)
+		"status_duration": 30,  # half a second frozen
 	},
 	55:
 	{

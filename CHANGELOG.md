@@ -35,6 +35,13 @@ protocol version.
 
 ### Added
 
+- Stun joins the lingering-status roster as a hard crowd-control effect: a stunned unit
+  cannot move, cast, or auto-attack until it wears off. The Verdani Spider's **Web Nest**
+  now lays this brief lock over its zone instead of a slow — its instant hit is trimmed in
+  trade — so the trapper opens a window rather than just chipping. The Spider keeps its
+  ranged **Web Snare** slow, so it now controls with both a snare and a lock. Like the
+  existing venom and web statuses, the effect is resolved entirely in the simulation; the
+  netcode protocol is unchanged.
 - Practice bots now have a difficulty: **Easy**, **Normal**, or **Hard**, chosen from the
   connect screen's new picker or with `--bot-difficulty`. Easy is the default, so a practice
   match is winnable out of the box, while Hard is the previous full-strength bot. A lower

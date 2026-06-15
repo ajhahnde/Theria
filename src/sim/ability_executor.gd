@@ -11,10 +11,14 @@ extends RefCounted
 ## that reduce hp leave the kill to the core's death-resolution pass, so an ability
 ## and an auto-attack that both finish a unit this tick kill it once.
 
-## Whether `caster` may cast `spec` this tick: the spec must belong to the caster's
-## active form, the caster must hold enough resource, and the ability must be off
-## cooldown. Reads only — the decision never mutates the world.
+## Whether `caster` may cast `spec` this tick: the caster must not be stunned, the spec
+## must belong to the caster's active form, the caster must hold enough resource, and the
+## ability must be off cooldown. Reads only — the decision never mutates the world. Both
+## the player's casts and the bot's gate through here, so a stunned hero of either kind is
+## silenced by the same check.
 static func can_cast(caster: SimEntity, spec: AbilitySpec) -> bool:
+	if caster.is_stunned():
+		return false
 	if spec.form != caster.form:
 		return false
 	if caster.resource < spec.cost:
@@ -49,7 +53,8 @@ static func execute(
 ## re-application overwrites any active status of the same kind, so it refreshes (the
 ## latest cast wins) rather than stacking — bounded and deterministic. A DOT clamps its
 ## interval to at least one tick and starts its damage counter fresh; a SLOW carries
-## only its percent. The duration always starts over.
+## only its percent; a STUN carries only its duration (its power and interval go unused).
+## The duration always starts over.
 static func _apply_status(target: SimEntity, spec: AbilitySpec) -> void:
 	target.statuses[spec.status] = {
 		"power": spec.status_power,

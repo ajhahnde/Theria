@@ -105,6 +105,69 @@ func test_slow_scales_move_speed_then_lifts() -> void:
 	assert_eq(sim.state.get_entity(mover).current_move_speed(), 600.0, "and full speed returns")
 
 
+# --- Stun: a hard lock ------------------------------------------------------
+
+
+func test_stun_freezes_movement_then_lifts() -> void:
+	var sim := _sim()
+	var caster := _silent_caster(sim)
+	var mover := sim.add_entity(1, Vector2(100.0, 0.0), 600.0, 600)  # would move 10 a tick
+	_cast_at(sim, caster, _status_spec(AbilitySpec.STATUS_STUN, 0, 5, 0), mover)
+	assert_eq(sim.state.get_entity(mover).current_move_speed(), 0.0, "a stun zeroes move speed")
+	var go := InputCommand.new()
+	go.move_dir = Vector2(0.0, 1.0)
+	sim.step({mover: go})
+	assert_almost_eq(
+		sim.state.get_entity(mover).position.y, 0.0, 0.01, "a stunned unit holds its ground"
+	)
+	for _i in 5:
+		sim.step({mover: go})
+	var freed := sim.state.get_entity(mover)
+	assert_false(
+		freed.statuses.has(AbilitySpec.STATUS_STUN), "the stun lifts when its duration runs out"
+	)
+	assert_eq(freed.current_move_speed(), 600.0, "and full move speed returns")
+	assert_true(freed.position.y > 0.0, "so the unit moves again once freed")
+
+
+func test_stun_blocks_casting() -> void:
+	var sim := _sim()
+	var caster := _silent_caster(sim)
+	var victim := sim.add_hero(1, Vector2(100.0, 0.0), 320.0)
+	var ready := AbilitySpec.from_dict({})  # human form, free, off cooldown: castable by default
+	assert_true(
+		AbilityExecutor.can_cast(sim.state.get_entity(victim), ready),
+		"an un-stunned hero can cast a ready, affordable ability",
+	)
+	_cast_at(sim, caster, _status_spec(AbilitySpec.STATUS_STUN, 0, 5, 0), victim)
+	assert_false(
+		AbilityExecutor.can_cast(sim.state.get_entity(victim), ready),
+		"but a stunned hero cannot cast at all",
+	)
+	for _i in 5:
+		sim.step({})
+	assert_true(
+		AbilityExecutor.can_cast(sim.state.get_entity(victim), ready),
+		"and casting returns once the stun lifts",
+	)
+
+
+func test_stun_blocks_auto_attack() -> void:
+	var sim := _sim()
+	var attacker := sim.add_hero(0, Vector2.ZERO, 0.0)  # 60 damage, range 250, cooldown 36
+	var dummy := sim.add_entity(1, Vector2(100.0, 0.0), 0.0, 600)  # in range, takes the hit
+	# A team-1 source to lay the stun on the team-0 attacker; silenced so only the stun,
+	# not its own attack, touches the world.
+	var stun_src := sim.add_hero(1, Vector2(120.0, 0.0), 0.0)
+	sim.state.get_entity(stun_src).attack_damage = 0
+	_cast_at(sim, stun_src, _status_spec(AbilitySpec.STATUS_STUN, 0, 5, 0), attacker)
+	for _i in 4:
+		sim.step({})
+	assert_eq(sim.state.get_entity(dummy).hp, 600, "a stunned attacker lands no auto-attack")
+	sim.step({})  # the stun lifts this tick and the attacker, off cooldown, strikes
+	assert_eq(sim.state.get_entity(dummy).hp, 540, "and it attacks again once the stun lifts")
+
+
 # --- Stacking + determinism -------------------------------------------------
 
 
@@ -159,3 +222,11 @@ func test_the_catalog_wires_venom_to_dot_and_web_to_slow() -> void:
 	assert_true(web.status_power > 0 and web.status_duration > 0, "with a real slow")
 	var burst := AbilityData.spec(14)  # Solane: Maul -- pure burst
 	assert_eq(burst.status, AbilitySpec.STATUS_NONE, "a Solane strike leaves no status")
+
+
+func test_the_catalog_wires_web_nest_to_a_stun() -> void:
+	var nest := AbilityData.spec(54)  # Spider: Web Nest
+	assert_eq(nest.status, AbilitySpec.STATUS_STUN, "Web Nest now carries a hard stun")
+	assert_true(nest.status_duration > 0, "with a real lock duration")
+	var snare := AbilityData.spec(50)  # Spider: Web Snare -- still a slow
+	assert_eq(snare.status, AbilitySpec.STATUS_SLOW, "the Spider keeps its Web Snare slow")

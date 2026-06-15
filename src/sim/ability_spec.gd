@@ -42,11 +42,15 @@ const EFFECT_TRANSFORM := 2
 ##          `status_duration` ticks, so the bite keeps biting after it lands.
 ##   SLOW — web: scales the target's move speed by (100 - `status_power`) percent for
 ##          `status_duration` ticks, so a snared enemy crawls.
+##   STUN — a hard lock: for `status_duration` ticks the target cannot move, cast, or
+##          auto-attack. A stun has no magnitude — `status_power` and `status_interval`
+##          are unused; it either holds the unit or it does not.
 ## A status rides on the ability's target selection — it is laid by the DAMAGE/area
 ## path on every enemy struck, so a SELF heal or transform never carries one.
 const STATUS_NONE := 0
 const STATUS_DOT := 1
 const STATUS_SLOW := 2
+const STATUS_STUN := 3
 
 ## Catalog id (unique across the roster) and display name.
 var id: int = 0
