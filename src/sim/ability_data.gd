@@ -30,9 +30,12 @@ extends RefCounted
 ##   - **Chameleon** — an ambusher: a short hard skillshot and the single heaviest hit
 ##                     in either tribe, on the leanest, fastest-refilling pool.
 ## In a practice match the player's squad fields the Solane and the bot squad the
-## Verdani, so both rosters and all four targeting modes are exercised at once. The two
-## tribes are still effect-mirrors (DAMAGE/HEAL/TRANSFORM); the venom/web flavor is carried
-## by their targeting mix, tuning, and economy until a richer effect schema lands.
+## Verdani, so both rosters and all four targeting modes are exercised at once. The
+## Verdani's venom and web are now mechanical, not just named: their striking abilities
+## carry a lingering status (see AbilitySpec.STATUS_*) — venom is a damage-over-time, web
+## a movement slow — so the bite keeps biting and the snare actually snares. Each venom
+## ability trades part of its instant power for that lingering bite, so the Verdani lean
+## attrition where the Solane stay burst.
 
 ## Ability rows keyed by catalog id. Each row is parsed on demand into a typed
 ## AbilitySpec by `spec`; a sparse row leans on the spec defaults. The dictionary's
@@ -359,7 +362,11 @@ const ABILITIES := {
 		"cost": 20,
 		"cooldown_ticks": 24,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 70,
+		"power": 50,  # trimmed from a pure poke: the rest of the bite is the venom below
+		"status": AbilitySpec.STATUS_DOT,  # venom: lingering damage over two seconds
+		"status_power": 6,
+		"status_duration": 120,
+		"status_interval": 30,
 	},
 	41:
 	{
@@ -396,7 +403,11 @@ const ABILITIES := {
 		"cost": 15,
 		"cooldown_ticks": 18,  # cheap and fast: harass on repeat
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 75,
+		"power": 55,  # a lighter strike now that the fang leaves venom
+		"status": AbilitySpec.STATUS_DOT,
+		"status_power": 5,
+		"status_duration": 120,
+		"status_interval": 30,
 	},
 	44:
 	{
@@ -409,7 +420,11 @@ const ABILITIES := {
 		"cost": 35,
 		"cooldown_ticks": 50,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 150,
+		"power": 105,  # the heavy payoff, now split between the coil and its deep venom
+		"status": AbilitySpec.STATUS_DOT,  # the tribe's strongest venom: a heavy lingering bleed
+		"status_power": 11,
+		"status_duration": 120,
+		"status_interval": 30,
 	},
 	45:
 	{
@@ -435,7 +450,10 @@ const ABILITIES := {
 		"cost": 30,
 		"cooldown_ticks": 38,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 50,  # the lowest per-hit power in either tribe: pure attrition
+		"power": 45,  # the lowest per-hit power in either tribe: attrition, now with a snare
+		"status": AbilitySpec.STATUS_SLOW,  # web: the strongest, longest slow — the trapper's lock
+		"status_power": 45,  # a 45% slow
+		"status_duration": 150,
 	},
 	51:
 	{
@@ -472,7 +490,11 @@ const ABILITIES := {
 		"cost": 20,
 		"cooldown_ticks": 30,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 85,
+		"power": 65,  # a lighter bite, the rest delivered as venom
+		"status": AbilitySpec.STATUS_DOT,
+		"status_power": 5,
+		"status_duration": 120,
+		"status_interval": 30,
 	},
 	54:
 	{
@@ -486,7 +508,10 @@ const ABILITIES := {
 		"cost": 35,
 		"cooldown_ticks": 46,
 		"effect": AbilitySpec.EFFECT_DAMAGE,
-		"power": 55,
+		"power": 50,  # a touch lighter, the nest now also snares the zone
+		"status": AbilitySpec.STATUS_SLOW,  # web: a shorter, wider slow than the snare
+		"status_power": 30,  # a 30% slow
+		"status_duration": 90,
 	},
 	55:
 	{

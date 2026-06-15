@@ -39,8 +39,24 @@ static func execute(
 		AbilitySpec.EFFECT_DAMAGE:
 			for target in _targets(state, caster, spec, command):
 				target.hp -= spec.power
+				if spec.status != AbilitySpec.STATUS_NONE:
+					_apply_status(target, spec)
 	caster.ability_cooldowns[spec.id] = spec.cooldown_ticks
 	caster.resource -= spec.cost
+
+
+## Lays the spec's lingering status on one struck target. One instance per kind: a
+## re-application overwrites any active status of the same kind, so it refreshes (the
+## latest cast wins) rather than stacking — bounded and deterministic. A DOT clamps its
+## interval to at least one tick and starts its damage counter fresh; a SLOW carries
+## only its percent. The duration always starts over.
+static func _apply_status(target: SimEntity, spec: AbilitySpec) -> void:
+	target.statuses[spec.status] = {
+		"power": spec.status_power,
+		"remaining": spec.status_duration,
+		"interval": maxi(1, spec.status_interval),
+		"counter": 0,
+	}
 
 
 ## Swaps the caster to its other form and to that form's resource pool: max and

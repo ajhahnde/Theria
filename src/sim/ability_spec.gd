@@ -35,6 +35,19 @@ const EFFECT_DAMAGE := 0
 const EFFECT_HEAL := 1
 const EFFECT_TRANSFORM := 2
 
+## A lingering status an ability leaves on each enemy it strikes, on top of its
+## immediate effect — the schema behind the Verdani's venom and web flavor.
+##   NONE — leaves nothing (the default; every Solane ability and every heal/transform).
+##   DOT  — venom: deals `status_power` hp every `status_interval` ticks for
+##          `status_duration` ticks, so the bite keeps biting after it lands.
+##   SLOW — web: scales the target's move speed by (100 - `status_power`) percent for
+##          `status_duration` ticks, so a snared enemy crawls.
+## A status rides on the ability's target selection — it is laid by the DAMAGE/area
+## path on every enemy struck, so a SELF heal or transform never carries one.
+const STATUS_NONE := 0
+const STATUS_DOT := 1
+const STATUS_SLOW := 2
+
 ## Catalog id (unique across the roster) and display name.
 var id: int = 0
 var name: String = ""
@@ -65,6 +78,16 @@ var effect: int = EFFECT_DAMAGE
 ## swaps to the caster's other form.
 var power: int = 0
 
+## The lingering status (above) laid on each enemy this ability strikes, and its
+## tuning. `status` selects the kind (NONE leaves the ability instant-only).
+## `status_power` is hp-per-interval for DOT, percent-slow for SLOW; `status_duration`
+## is how long it lasts in ticks; `status_interval` is how often a DOT bites (clamped
+## to >= 1 when applied, so it never ticks more than once a tick; ignored by SLOW).
+var status: int = STATUS_NONE
+var status_power: int = 0
+var status_duration: int = 0
+var status_interval: int = 0
+
 
 ## Builds a spec from one catalog row. Every field defaults, so a sparse row only
 ## states what it changes — keeping the catalog terse and the parse total.
@@ -81,4 +104,8 @@ static func from_dict(d: Dictionary) -> AbilitySpec:
 	spec.cooldown_ticks = d.get("cooldown_ticks", 0)
 	spec.effect = d.get("effect", EFFECT_DAMAGE)
 	spec.power = d.get("power", 0)
+	spec.status = d.get("status", STATUS_NONE)
+	spec.status_power = d.get("status_power", 0)
+	spec.status_duration = d.get("status_duration", 0)
+	spec.status_interval = d.get("status_interval", 0)
 	return spec

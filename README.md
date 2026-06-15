@@ -37,9 +37,11 @@ simulation. With that authority model proven, networked play over a
 listen-server, the hero ability layer, and two full rosters of heroes — the
 **Solane**, savanna big-cat shifters (lion, cheetah, hyena), and the opposing
 **Verdani**, jungle venom-and-shadow shifters (snake, spider, chameleon) — now
-run on top of it. A practice match fields the Solane squad against the Verdani —
-the player drives one Solane hero, bots fill the rest — so both rosters are on
-the field at once; multi-hero teams over the wire and the art direction come next.
+run on top of it. A practice match fields one tribe against the other — `--hero`
+picks any hero, the player drives it and bots fill out both squads — so both
+rosters are on the field at once. The Verdani fight by attrition: their venom
+lingers as damage over time and their webs slow what they catch, a foil to the
+Solane's burst. Multi-hero teams over the wire and the art direction come next.
 
 ## Architecture
 

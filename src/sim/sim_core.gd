@@ -167,6 +167,7 @@ func step(inputs: Dictionary) -> void:
 	_step_spawning()
 	_step_movement(inputs)
 	_step_creeps()
+	_step_statuses()
 	_step_abilities(inputs)
 	_step_combat()
 	_resolve_deaths()
@@ -198,7 +199,7 @@ static func apply_movement(entity: SimEntity, command: InputCommand) -> void:
 		move_dir = command.move_dir
 	if move_dir.length() > 1.0:
 		move_dir = move_dir.normalized()
-	entity.position += move_dir * entity.move_speed * TICK_DELTA
+	entity.position += move_dir * entity.current_move_speed() * TICK_DELTA
 	entity.position = MapData.clamp_to_bounds(entity.position)
 
 
@@ -252,6 +253,35 @@ func _step_creeps() -> void:
 			if creep.waypoint_index < path.size() - 1:
 				creep.waypoint_index += 1
 		creep.position = MapData.clamp_to_bounds(creep.position)
+
+
+## Ages every active status by one tick and applies a venom DOT's bite. For each
+## entity carrying a status: a DOT advances its interval counter and, on each interval,
+## subtracts its damage; every status counts its duration down and is dropped when it
+## expires. A SLOW does nothing here — movement reads the live slow off the entity each
+## tick — it only ages out. Runs before the cast step (upkeep first, like resource
+## regen) so a status applied this tick begins aging next tick, and before
+## `_resolve_deaths` so a lethal DOT, an auto-attack, and an ability all reconcile in
+## the one death pass. Pure and insertion-ordered over entities and each entity's
+## statuses, so it replays identically.
+func _step_statuses() -> void:
+	for id in state.entities:
+		var entity: SimEntity = state.entities[id]
+		if entity.statuses.is_empty():
+			continue
+		var expired: Array[int] = []
+		for kind in entity.statuses:
+			var s: Dictionary = entity.statuses[kind]
+			if kind == AbilitySpec.STATUS_DOT:
+				s["counter"] += 1
+				if s["counter"] >= s["interval"]:
+					s["counter"] = 0
+					entity.hp -= s["power"]
+			s["remaining"] -= 1
+			if s["remaining"] <= 0:
+				expired.append(kind)
+		for kind in expired:
+			entity.statuses.erase(kind)
 
 
 ## Advances the ability layer one tick. First every hero's passive upkeep —

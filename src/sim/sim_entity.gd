@@ -70,6 +70,15 @@ var ability_cooldowns: Dictionary = {}
 ## the immutable specs the ids resolve to.
 var kit: Dictionary = {}
 
+## Active status effects (venom DOT, web SLOW) left on this entity by abilities that
+## struck it, keyed by status kind (AbilitySpec.STATUS_*) so there is one instance per
+## kind — a re-application refreshes it. Each value holds `power`, `remaining` ticks,
+## the DOT `interval`, and its `counter`. Empty for every entity carrying no status
+## (towers, creeps, an unharmed hero), so the status layer is inert until something is
+## laid on. SimCore.`_step_statuses` ages and ticks these; insertion order keeps the
+## pass deterministic.
+var statuses: Dictionary = {}
+
 
 func _init(
 	p_id: int = 0,
@@ -109,4 +118,18 @@ func clone() -> SimEntity:
 	copy.form_resource_regen = form_resource_regen.duplicate()
 	copy.ability_cooldowns = ability_cooldowns.duplicate()
 	copy.kit = kit.duplicate(true)
+	copy.statuses = statuses.duplicate(true)
 	return copy
+
+
+## This entity's move speed after any active slow. A SLOW status scales the base speed
+## by (100 - its percent); with none, the base speed is returned unchanged — so a
+## status-free entity (every entity on the wire, every Solane unit) moves by exactly
+## the same math as before. The authoritative movement step and the client's local
+## prediction both read it, so a slowed hero is predicted identically.
+func current_move_speed() -> float:
+	var slow: Dictionary = statuses.get(AbilitySpec.STATUS_SLOW, {})
+	if slow.is_empty():
+		return move_speed
+	var pct := clampi(slow["power"], 0, 100)
+	return move_speed * float(100 - pct) / 100.0

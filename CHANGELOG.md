@@ -35,6 +35,12 @@ protocol version.
 
 ### Added
 
+- The Verdani's venom and web are now mechanics, not just names: a venom strike leaves a
+  damage-over-time that keeps biting for two seconds after it lands, and a web leaves a
+  movement slow on what it catches. Each venom ability trades part of its instant hit for
+  that lingering damage, so the Verdani lean on attrition where the Solane stay burst. A
+  struck unit carries one instance of each effect — a re-cast refreshes rather than stacks.
+  Sim-side only; the netcode protocol is unchanged.
 - A practice match is now a tribe-versus-tribe choice: `--hero` accepts any hero of either
   tribe, and the chosen hero's tribe fields the player's team while the opposing tribe fills
   the bots — so the Verdani are now playable, not just an opponent. The default still

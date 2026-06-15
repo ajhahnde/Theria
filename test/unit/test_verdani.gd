@@ -102,7 +102,11 @@ func test_snake_fang_strike_locks_the_longest_single_target() -> void:
 	cast.ability_slot = 0  # animal Q = Fang Strike
 	cast.target_id = far
 	sim.step({id: cast})
-	assert_eq(sim.state.get_entity(far).hp, 525, "Fang Strike locks a target 360 away for its 75")
+	assert_eq(sim.state.get_entity(far).hp, 545, "Fang Strike locks a target 360 away for its 55")
+	assert_true(
+		sim.state.get_entity(far).statuses.has(AbilitySpec.STATUS_DOT),
+		"and leaves its venom on the locked target",
+	)
 	assert_eq(sim.state.get_entity(id).resource, 75, "and spends its cheap 15 from the 90 pool")
 
 
@@ -119,7 +123,11 @@ func test_spider_web_nest_zones_the_widest_area() -> void:
 	cast.ability_slot = 2  # animal E = Web Nest
 	cast.target_point = Vector2(300.0, 0.0)
 	sim.step({id: cast})
-	assert_eq(sim.state.get_entity(inside).hp, 545, "an enemy in the wide nest takes Web Nest's 55")
+	assert_eq(sim.state.get_entity(inside).hp, 550, "an enemy in the wide nest takes Web Nest's 50")
+	assert_true(
+		sim.state.get_entity(inside).statuses.has(AbilitySpec.STATUS_SLOW),
+		"and is snared by the web's slow",
+	)
 	assert_eq(sim.state.get_entity(outside).hp, 600, "an enemy beyond its 220 radius is spared")
 
 
