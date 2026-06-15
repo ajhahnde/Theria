@@ -26,6 +26,9 @@ protocol version.
 
 ### Changed
 
+- The hero models now turn to face where they move instead of sliding sideways, and the
+  rigged one (the spider) loops a walk cycle while it moves and an idle one while it stands
+  — the others, which ship no animation, just turn. Presentation only.
 - The hero models read cleaner: their team-colour wash is lighter, so a dark animal (the
   spider) keeps its own colour instead of drowning to near-black, and each hero's floating
   bars now hang just above its own model — the short animals and the tall ones both read

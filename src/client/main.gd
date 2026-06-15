@@ -691,9 +691,12 @@ func _camera_focus(state: SimState) -> SimEntity:
 ## per-tick update mutates, so nothing is rebuilt while the entity lives.
 func _make_view(entity: SimEntity) -> Dictionary:
 	var root := Node3D.new()
+	root.position = _world(entity.position)
 	add_child(root)
 	var view := {"root": root}
 	view["body"] = _build_body(root, entity)
+	if entity.is_hero and HeroModelLibrary.has_model(entity.kit_id):
+		HeroModelLibrary.setup_facing(view, entity.kit_id, view["body"])
 	if entity.is_hero:
 		var ring := MeshInstance3D.new()
 		ring.mesh = _ring_mesh()
@@ -747,10 +750,14 @@ func _attach_overlay(view: Dictionary, entity: SimEntity) -> void:
 	view["status"] = label
 
 
-## Reconciles one view with its entity: position, the form-ring colour, the bar fills,
-## and the status label. Cheap per-tick mutation only — no node is created here.
+## Reconciles one view with its entity: position, facing, the form-ring colour, the bar
+## fills, and the status label. Cheap per-tick mutation only — no node is created here.
 func _update_view(view: Dictionary, entity: SimEntity) -> void:
-	(view["root"] as Node3D).position = _world(entity.position)
+	var root := view["root"] as Node3D
+	var moved := _world(entity.position) - root.position
+	root.position = _world(entity.position)
+	if view.has("yaw"):
+		HeroModelLibrary.drive_facing(view, view["body"], Vector2(moved.x, moved.z))
 	if view.has("ring"):
 		var mat := (view["ring"] as MeshInstance3D).material_override as StandardMaterial3D
 		var animal := entity.form == AbilitySpec.FORM_ANIMAL
