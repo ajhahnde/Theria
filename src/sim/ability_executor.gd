@@ -47,6 +47,42 @@ static func execute(
 					_apply_status(target, spec)
 	caster.ability_cooldowns[spec.id] = spec.cooldown_ticks
 	caster.resource -= spec.cost
+	_record_fx(state, caster, spec, command)
+
+
+## Notes the cast on the state's transient FX log for the renderer — origin, landing
+## point, area radius, and the cast's kind/effect/status, enough to draw a skillshot
+## line or an area flash. A pure presentation side effect: the log never feeds back into
+## the simulation and never crosses the wire, so recording it keeps the cast deterministic.
+static func _record_fx(
+	state: SimState, caster: SimEntity, spec: AbilitySpec, command: InputCommand
+) -> void:
+	state.fx_events.append(
+		{
+			"kind": spec.target_kind,
+			"effect": spec.effect,
+			"status": spec.status,
+			"origin": caster.position,
+			"point": _fx_point(state, caster, spec, command),
+			"radius": spec.radius,
+		}
+	)
+
+
+## Where a cast's FX is centred: the landing point for an aimed ability, the locked
+## enemy's position for a unit-targeted one (the caster's own spot if that enemy is gone),
+## and the caster for a self-cast. Mirrors `_targets`/`_landing_point` so the flash sits
+## where the ability actually resolved.
+static func _fx_point(
+	state: SimState, caster: SimEntity, spec: AbilitySpec, command: InputCommand
+) -> Vector2:
+	match spec.target_kind:
+		AbilitySpec.TARGET_SKILLSHOT, AbilitySpec.TARGET_GROUND:
+			return _landing_point(caster, spec, command)
+		AbilitySpec.TARGET_UNIT:
+			var t: SimEntity = state.get_entity(command.target_id)
+			return t.position if t != null else caster.position
+	return caster.position
 
 
 ## Lays the spec's lingering status on one struck target. One instance per kind: a

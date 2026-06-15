@@ -657,6 +657,8 @@ func _sync_world() -> void:
 		if not state.entities.has(id):
 			(_views[id]["root"] as Node3D).queue_free()
 			_views.erase(id)
+	for event in state.fx_events:
+		MatchFx.play(self, event)
 	_follow_camera(state)
 
 

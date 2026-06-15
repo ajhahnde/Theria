@@ -164,6 +164,7 @@ func add_creep(team: int, lane: int, position: Vector2) -> int:
 ## result is a function of the prior state and `inputs` only (creep waves spawn
 ## off `state.tick`). Once a nexus has fallen the match is over and step no-ops.
 func step(inputs: Dictionary) -> void:
+	state.fx_events.clear()  # this tick's cast FX only — cleared even on a no-op tick
 	if state.is_match_over():
 		return
 	_step_spawning()

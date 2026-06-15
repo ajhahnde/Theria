@@ -58,6 +58,15 @@ protocol version.
 
 ### Added
 
+- Abilities now show on screen instead of resolving invisibly. Each cast flashes for a
+  beat: a skillshot or a unit-targeted ability draws a beam from the caster to where it
+  landed, a ground area draws a disc at its **true radius** — so a zone like the Spider's
+  stun nest reads its real footprint — and a self-cast (a heal, a shapeshift) pulses a ring
+  on the caster. The flash is coloured by what the cast does (warm for damage, green for a
+  heal, or the status's own colour for a stun, slow, or poison) and fades out and frees
+  itself, so the field stays clean. The simulation records each cast on a transient log the
+  renderer drains every tick; it never crosses the wire, so the netcode protocol is
+  unchanged (a snapshot-fed client draws no cast FX, as it shows no statuses).
 - Stun joins the lingering-status roster as a hard crowd-control effect: a stunned unit
   cannot move, cast, or auto-attack until it wears off. The Verdani Spider's **Web Nest**
   now lays this brief lock over its zone instead of a slow — its instant hit is trimmed in
