@@ -23,6 +23,17 @@ var winner: int = -1
 ## exactly as it shows no statuses. Read by the presenter, ignored by the simulation.
 var fx_events: Array = []
 
+## Presentation-only record of the damage dealt this tick — one entry per hp loss (an
+## auto-attack, an ability hit, a venom tick), each `{position, amount}`, for the renderer to
+## pop a floating damage number over the struck unit. Same lifecycle as `fx_events`: cleared
+## at the top of every `step` and never serialized, so it stays a LOCAL/HOST render hint.
+var hit_events: Array = []
+
+## Presentation-only record of the auto-attacks that landed this tick — one entry per strike,
+## each `{origin, target, ranged}`, so the renderer flies a projectile from a ranged attacker
+## or flashes a close-in impact for a melee one. Same lifecycle as `fx_events`.
+var attack_events: Array = []
+
 
 func add_entity(entity: SimEntity) -> void:
 	entities[entity.id] = entity

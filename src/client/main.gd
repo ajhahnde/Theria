@@ -146,6 +146,8 @@ var _bot_id: int = 0
 ## `move_dir` on the client before it reaches the sim or the wire, so neither is changed.
 var _move_target: Vector2 = Vector2.ZERO
 var _has_move_target: bool = false
+## The on-ground marker drawn at the active move target while the hero walks to it.
+var _move_marker: MoveMarker = null
 
 ## LOCAL: the hero the player drives, from `--hero` — any hero of either tribe. Its
 ## tribe fills the player's team and the opposing tribe the bot team, so the choice also
@@ -622,6 +624,8 @@ func _build_world() -> void:
 	_camera.current = true
 	add_child(_camera)
 	_point_camera(MapData.BOUNDS.get_center())
+	_move_marker = MoveMarker.new()
+	add_child(_move_marker)
 
 
 ## Reconciles the view pool against the live state, then trails the camera. Called each
@@ -642,6 +646,14 @@ func _sync_world() -> void:
 			_views.erase(id)
 	for event in state.fx_events:
 		MatchFx.play(self, event)
+	for attack in state.attack_events:
+		CombatFx.strike(self, attack)
+	for hit in state.hit_events:
+		CombatFx.number(self, hit)
+	if _has_move_target:
+		_move_marker.point_at(_move_target)
+	else:
+		_move_marker.clear()
 	_follow_camera(state)
 
 
@@ -752,7 +764,7 @@ func _update_view(view: Dictionary, entity: SimEntity) -> void:
 		(view["res_node"] as Node3D).visible = entity.resource_max > 0
 		_set_bar(view["res_fg"], _fraction(entity.resource, entity.resource_max))
 	if view.has("status"):
-		_update_status(view["status"], entity)
+		StatusLabel.refresh(view["status"], entity)
 
 
 ## Left-anchors a bar's fill to `frac` of its full width by scaling the foreground quad
@@ -761,46 +773,6 @@ func _update_view(view: Dictionary, entity: SimEntity) -> void:
 func _set_bar(fg: MeshInstance3D, frac: float) -> void:
 	fg.scale.x = maxf(frac, 0.0001)
 	fg.position.x = -BAR_WIDTH * 0.5 * (1.0 - frac)
-
-
-## Writes the active statuses onto a hero's floating label — `STUNNED` / `POISONED` /
-## `SLOWED`, coloured by the highest-priority one — and hides it when there are none.
-## Statuses live only in the authoritative sim (LOCAL/HOST), so a pure CLIENT shows
-## none until they are carried over the wire; the label simply stays hidden there.
-func _update_status(label: Label3D, entity: SimEntity) -> void:
-	if entity.statuses.is_empty():
-		label.visible = false
-		return
-	var names: Array[String] = []
-	for kind in [AbilitySpec.STATUS_STUN, AbilitySpec.STATUS_DOT, AbilitySpec.STATUS_SLOW]:
-		if entity.statuses.has(kind):
-			names.append(_status_name(kind))
-			if names.size() == 1:
-				label.modulate = _status_color(kind)
-	label.visible = true
-	label.text = "\n".join(names)
-
-
-func _status_name(kind: int) -> String:
-	match kind:
-		AbilitySpec.STATUS_STUN:
-			return "STUNNED"
-		AbilitySpec.STATUS_DOT:
-			return "POISONED"
-		AbilitySpec.STATUS_SLOW:
-			return "SLOWED"
-	return ""
-
-
-func _status_color(kind: int) -> Color:
-	match kind:
-		AbilitySpec.STATUS_STUN:
-			return Color(1.0, 0.9, 0.3)
-		AbilitySpec.STATUS_DOT:
-			return Color(0.6, 1.0, 0.4)
-		AbilitySpec.STATUS_SLOW:
-			return Color(0.55, 0.8, 1.0)
-	return Color.WHITE
 
 
 ## A billboarded HP/resource bar: a dark background quad with a coloured foreground quad

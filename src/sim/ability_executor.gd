@@ -43,6 +43,7 @@ static func execute(
 		AbilitySpec.EFFECT_DAMAGE:
 			for target in _targets(state, caster, spec, command):
 				target.hp -= spec.power
+				state.hit_events.append({"position": target.position, "amount": spec.power})
 				if spec.status != AbilitySpec.STATUS_NONE:
 					_apply_status(target, spec)
 	caster.ability_cooldowns[spec.id] = spec.cooldown_ticks

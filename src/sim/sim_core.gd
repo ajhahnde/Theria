@@ -165,6 +165,8 @@ func add_creep(team: int, lane: int, position: Vector2) -> int:
 ## off `state.tick`). Once a nexus has fallen the match is over and step no-ops.
 func step(inputs: Dictionary) -> void:
 	state.fx_events.clear()  # this tick's cast FX only — cleared even on a no-op tick
+	state.hit_events.clear()  # this tick's damage numbers
+	state.attack_events.clear()  # this tick's auto-attack strikes
 	if state.is_match_over():
 		return
 	_step_spawning()
@@ -283,6 +285,7 @@ func _step_statuses() -> void:
 				if s["counter"] >= s["interval"]:
 					s["counter"] = 0
 					entity.hp -= s["power"]
+					_record_damage(entity, s["power"])
 			s["remaining"] -= 1
 			if s["remaining"] <= 0:
 				expired.append(kind)
@@ -366,6 +369,28 @@ func _step_combat() -> void:
 			continue
 		target.hp -= attacker.attack_damage
 		attacker.cooldown = attacker.attack_cooldown_ticks
+		_record_attack_fx(attacker, target)
+
+
+## Records an auto-attack for the renderer: a strike from `attacker` to `target`, flagged
+## ranged (the renderer flies a projectile) or melee (a close-in impact), plus the damage
+## number over the target. A structure or a kiting hero fires; everything else — creeps and
+## brawler heroes — hits melee.
+func _record_attack_fx(attacker: SimEntity, target: SimEntity) -> void:
+	var ranged := (
+		attacker.is_structure
+		or (attacker.is_hero and attacker.stance == AbilityData.STANCE_KITE)
+	)
+	state.attack_events.append(
+		{"origin": attacker.position, "target": target.position, "ranged": ranged}
+	)
+	_record_damage(target, attacker.attack_damage)
+
+
+## Notes `amount` of damage on a struck entity for the floating-number renderer. A pure
+## presentation hint — like `fx_events`, it never feeds the sim or crosses the wire.
+func _record_damage(entity: SimEntity, amount: int) -> void:
+	state.hit_events.append({"position": entity.position, "amount": amount})
 
 
 func _nearest_enemy_in_range(attacker: SimEntity) -> SimEntity:

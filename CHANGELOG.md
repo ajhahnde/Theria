@@ -64,6 +64,15 @@ protocol version.
 
 ### Added
 
+- Combat now reads on screen. Every hit — an auto-attack, an ability, or a venom tick — pops
+  a floating damage number over the struck unit, so damage is legible instead of only a bar
+  ticking down. Auto-attacks themselves now show: a ranged attacker (a tower, a skirmisher
+  hero) flies a bolt at its target, while a melee one (a creep, a brawler hero) flashes a
+  close-in impact. The sim records each hit and strike on a per-tick presentation log it
+  already keeps for casts; like that log it never crosses the wire, so this is a LOCAL/HOST
+  render change only — the simulation and the netcode protocol are unchanged.
+- A click-to-move destination marker: right-clicking lays a pulsing ring on the ground where
+  the hero is headed, so the move target reads at a glance. Presentation only.
 - Abilities now show on screen instead of resolving invisibly. Each cast flashes for a
   beat: a skillshot or a unit-targeted ability draws a beam from the caster to where it
   landed, a ground area draws a disc at its **true radius** — so a zone like the Spider's
