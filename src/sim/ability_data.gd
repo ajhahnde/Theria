@@ -603,6 +603,15 @@ const ABILITIES := {
 	},
 }
 
+## Bot stance per kit: how a bot positions a hero it drives. BRAWL — the default for
+## any kit that names no stance — closes the gap and shifts toward whichever form can
+## land a hit. KITE holds the kit's ranged poke and keeps the enemy at arm's length,
+## fighting hit-and-run from its skillshot band rather than committing to melee. Read by
+## BotController and stamped onto the hero at equip; a player-driven hero ignores it.
+const STANCE_BRAWL := 0
+const STANCE_KITE := 1
+
+
 ## Hero kits keyed by kit id. A kit names, per form, the resource pool (`max` and
 ## the regen interval `regen_ticks` — one resource point restored every that many
 ## ticks, 0 for none) and the slot-to-ability-id bar. A hero equipped with a kit
@@ -643,7 +652,8 @@ const KITS := {
 	"cheetah":
 	{
 		# A skirmisher: a lean pool that refills fast, to chain cheap pokes and the
-		# low-cooldown Hamstring.
+		# low-cooldown Hamstring. A kiter — it holds its long Spear Throw range.
+		"stance": STANCE_KITE,
 		"resource":
 		{
 			AbilitySpec.FORM_HUMAN: {"max": 80, "regen_ticks": 8},
@@ -703,7 +713,9 @@ const KITS := {
 	"chameleon":
 	{
 		# An ambusher: the leanest pool on the fastest regen, to land a burst and
-		# refill for the next one — the most boom-and-bust economy of either tribe.
+		# refill for the next one — the most boom-and-bust economy of either tribe. A
+		# kiter — it darts in and out at its Tongue Lash range rather than brawling.
+		"stance": STANCE_KITE,
 		"resource":
 		{
 			AbilitySpec.FORM_HUMAN: {"max": 70, "regen_ticks": 7},

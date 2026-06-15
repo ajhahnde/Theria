@@ -82,12 +82,12 @@ func test_bot_picks_a_ground_ability_that_can_reach() -> void:
 func test_a_unit_ability_locks_the_target() -> void:
 	var sim := SimCore.new()
 	sim.spawn_creeps = false
-	var id := _hero(sim, "cheetah", Vector2.ZERO)
-	# Shift to the animal kit, whose slot 0 (Hamstring) is unit-targeted.
+	var id := _hero(sim, "snake", Vector2.ZERO)  # a brawler, so it commits to its animal kit
+	# Shift to the animal kit, whose slot 0 (Fang Strike) is unit-targeted.
 	var beast := InputCommand.new()
 	beast.ability_slot = 3
 	sim.step({id: beast})
-	var enemy := sim.add_entity(1, Vector2(200.0, 0.0), 0.0, 600)  # inside Hamstring's 280
+	var enemy := sim.add_entity(1, Vector2(200.0, 0.0), 0.0, 600)  # inside Fang Strike's 360
 	var command := _bot().decide(sim.state, id)
 	assert_eq(command.ability_slot, 0, "the unit ability is selected")
 	assert_eq(command.target_id, enemy, "and locked onto the nearest enemy")
@@ -136,7 +136,8 @@ func test_bot_transforms_back_when_the_enemy_outruns_the_animal_kit() -> void:
 	sim.spawn_creeps = false
 	var id := _hero(sim, "cheetah", Vector2.ZERO)
 	_to_animal(sim, id)  # the animal kit reaches only to 280 (Hamstring / Killing Blow)
-	# Far outside the animal kit but on the human Spear Throw's 750 range: shift back.
+	# A kiter holds its ranged form: caught in the animal kit, it shifts back toward the
+	# longer human Spear Throw rather than fighting from melee.
 	sim.add_entity(1, Vector2(750.0, 0.0), 0.0, 600)
 	var command := _bot().decide(sim.state, id)
 	assert_eq(command.ability_slot, TRANSFORM_SLOT, "it shifts back toward the human poke")
@@ -182,3 +183,53 @@ func test_a_bot_cast_lands_in_the_sim() -> void:
 	sim.step({id: _bot().decide(sim.state, id)})
 	assert_eq(sim.state.get_entity(enemy).hp, 520, "Spirit Bolt's 80 lands on the enemy")
 	assert_eq(sim.state.get_entity(id).resource, 80, "and its 20 cost is booked")
+
+
+# --- Kite stance: a skirmisher holds its poke range -------------------------
+
+
+func test_equip_stamps_the_kit_stance() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var cheetah := _hero(sim, "cheetah", Vector2.ZERO)
+	var lion := _hero(sim, "lion", Vector2(50.0, 0.0))
+	assert_eq(sim.state.get_entity(cheetah).stance, AbilityData.STANCE_KITE, "the cheetah kites")
+	assert_eq(sim.state.get_entity(lion).stance, AbilityData.STANCE_BRAWL, "the lion brawls")
+
+
+func test_a_kiter_backs_off_a_point_blank_enemy_instead_of_meleeing() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var id := _hero(sim, "cheetah", Vector2.ZERO)
+	sim.add_entity(1, Vector2(150.0, 0.0), 0.0, 600)  # inside the Spear's dead zone, point-blank
+	var command := _bot().decide(sim.state, id)
+	assert_lt(command.move_dir.x, 0.0, "the kiter retreats from the enemy, not into it")
+	assert_eq(command.ability_slot, -1, "and does not drop to a melee form to engage")
+
+
+func test_a_kiter_holds_and_pokes_from_its_band() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var id := _hero(sim, "cheetah", Vector2.ZERO)
+	sim.add_entity(1, Vector2(750.0, 0.0), 0.0, 600)  # at the Spear Throw's landing range
+	var command := _bot().decide(sim.state, id)
+	assert_eq(command.move_dir, Vector2.ZERO, "inside its poke band the kiter holds position")
+	assert_eq(command.ability_slot, 0, "and fires its long skillshot")
+
+
+func test_a_kiter_closes_on_an_enemy_beyond_its_poke() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var id := _hero(sim, "cheetah", Vector2.ZERO)
+	sim.add_entity(1, Vector2(1000.0, 0.0), 0.0, 600)  # past the band: it must close to poke
+	var command := _bot().decide(sim.state, id)
+	assert_gt(command.move_dir.x, 0.0, "beyond its band the kiter advances to bring the poke in")
+
+
+func test_a_brawler_closes_a_point_blank_enemy() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var id := _hero(sim, "snake", Vector2.ZERO)  # a brawler: the contrast to the kiter
+	sim.add_entity(1, Vector2(150.0, 0.0), 0.0, 600)
+	var command := _bot().decide(sim.state, id)
+	assert_gt(command.move_dir.x, 0.0, "a brawler closes the gap rather than kiting away")

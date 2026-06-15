@@ -35,6 +35,12 @@ protocol version.
 
 ### Added
 
+- Bots now position to their hero's stance instead of all closing in the same way: the
+  skirmishers (Cheetah, Chameleon) kite — they hold their ranged form and keep an enemy
+  inside their skillshot band, backing off a point-blank attacker and closing on a distant
+  one, so they poke hit-and-run rather than committing to melee. Brawlers keep closing and
+  shifting toward whichever form can land a hit. Stance is authored per kit and read by the
+  bot; sim-side only, the netcode protocol is unchanged.
 - The Verdani's venom and web are now mechanics, not just names: a venom strike leaves a
   damage-over-time that keeps biting for two seconds after it lands, and a web leaves a
   movement slow on what it catches. Each venom ability trades part of its instant hit for

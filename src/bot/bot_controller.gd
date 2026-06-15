@@ -2,12 +2,15 @@ class_name BotController
 extends RefCounted
 ## Produces an InputCommand for a bot-controlled entity from the world state.
 ##
-## v0.1 behaviour: walk toward the nearest enemy, stop on contact, and — once the
-## entity is a kitted hero — cast its abilities. The bot shifts into the stance that
-## suits the fight (closing into its animal kit when an enemy slips inside the human
-## poke's reach, falling back to the human form to poke at range or to heal when
-## hurt), heals itself when hurt, and otherwise fires the first damaging ability of
-## its active form that can actually reach the target.
+## v0.1 behaviour: position against the nearest enemy and — once the entity is a kitted
+## hero — cast its abilities. Positioning follows the kit's stance (AbilityData.STANCE_*):
+## a BRAWLER walks in, stops on contact, and shifts toward whichever form can land a hit
+## (closing into its animal kit when an enemy slips inside the human poke's reach, falling
+## back to the human form to poke at range or to heal when hurt); a KITER (the skirmishers)
+## instead holds its ranged form and keeps the enemy inside its skillshot band — backing
+## off a point-blank enemy and closing on a distant one — so it pokes hit-and-run rather
+## than committing to melee. Either way it heals when hurt and otherwise fires the first
+## damaging ability of its active form that can actually reach the target.
 ## Deterministic — a pure function of the state — so a bot match replays identically
 ## and feeds the same simulation core a human would, gating every cast (a transform
 ## included) on the very `AbilityExecutor.can_cast` the player's casts pass through.
@@ -33,9 +36,12 @@ func decide(state: SimState, bot_id: int) -> InputCommand:
 	var target := _nearest_enemy(state, bot)
 	if target == null:
 		return command
-	var offset := target.position - bot.position
-	if offset.length() > STOP_RANGE:
-		command.move_dir = offset.normalized()
+	if bot.is_hero and bot.stance == AbilityData.STANCE_KITE:
+		_kite_move(command, bot, target)
+	else:
+		var offset := target.position - bot.position
+		if offset.length() > STOP_RANGE:
+			command.move_dir = offset.normalized()
 	if bot.is_hero:
 		_choose_cast(command, bot, target)
 	return command
@@ -84,6 +90,10 @@ func _preferred_form(bot: SimEntity, target: SimEntity) -> int:
 		and _form_has_ready_heal(bot, AbilitySpec.FORM_HUMAN)
 	):
 		return AbilitySpec.FORM_HUMAN
+	# A kiter does not drop to a shorter-range form to engage: it holds the form whose
+	# poke reaches farthest and creates distance with its feet instead.
+	if bot.stance == AbilityData.STANCE_KITE:
+		return _ranged_form(bot)
 	if (
 		not _form_reaches_with_damage(bot, bot.form, target)
 		and _form_reaches_with_damage(bot, other, target)
@@ -169,6 +179,67 @@ func _reaches(spec: AbilitySpec, dist: float) -> bool:
 		AbilitySpec.TARGET_SKILLSHOT:
 			return absf(dist - spec.range) <= spec.radius
 	return false
+
+
+## Positions a kiter: it holds the enemy inside its skillshot band — backing off when
+## the enemy is nearer than the band, closing when it is farther, and holding still
+## within it so the poke lands. A kiter whose current form has no skillshot poke (it is
+## briefly in the wrong form, about to shift back) just closes like a brawler until the
+## stance step returns it to its ranged form. Movement only — the cast step still fires.
+func _kite_move(command: InputCommand, bot: SimEntity, target: SimEntity) -> void:
+	var to_enemy := target.position - bot.position
+	var dist := to_enemy.length()
+	if dist <= 0.0:
+		return
+	var band := _kite_band(bot)
+	if band == Vector2.ZERO:
+		if dist > STOP_RANGE:
+			command.move_dir = to_enemy / dist
+		return
+	if dist < band.x:
+		command.move_dir = -to_enemy / dist
+	elif dist > band.y:
+		command.move_dir = to_enemy / dist
+
+
+## The distance band a kiter holds — [range - radius, range + radius] of its current
+## form's longest-range skillshot, the window in which that poke actually lands. Zero
+## when the form holds no skillshot, which tells `_kite_move` to close like a brawler.
+func _kite_band(bot: SimEntity) -> Vector2:
+	var best_range := 0.0
+	var best_radius := 0.0
+	for spec in _form_specs(bot, bot.form):
+		if spec.effect != AbilitySpec.EFFECT_DAMAGE:
+			continue
+		if spec.target_kind != AbilitySpec.TARGET_SKILLSHOT:
+			continue
+		if spec.range > best_range:
+			best_range = spec.range
+			best_radius = spec.radius
+	if best_range <= 0.0:
+		return Vector2.ZERO
+	return Vector2(best_range - best_radius, best_range + best_radius)
+
+
+## A kiter's preferred form: the one whose longest-reaching damaging ability reaches
+## farthest, so the kiter always fights from its poke form. A tie, or a kit with no
+## damaging ability at all, falls to the human form.
+func _ranged_form(bot: SimEntity) -> int:
+	if _longest_damage_range(bot, AbilitySpec.FORM_ANIMAL) > _longest_damage_range(
+		bot, AbilitySpec.FORM_HUMAN
+	):
+		return AbilitySpec.FORM_ANIMAL
+	return AbilitySpec.FORM_HUMAN
+
+
+## The range of the farthest-reaching damaging ability on `form`'s bar — how far that
+## stance can threaten — or 0 when the form holds no damaging ability.
+func _longest_damage_range(bot: SimEntity, form: int) -> float:
+	var best := 0.0
+	for spec in _form_specs(bot, form):
+		if spec.effect == AbilitySpec.EFFECT_DAMAGE and spec.range > best:
+			best = spec.range
+	return best
 
 
 func _nearest_enemy(state: SimState, bot: SimEntity) -> SimEntity:

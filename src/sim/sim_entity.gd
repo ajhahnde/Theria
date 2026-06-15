@@ -48,6 +48,12 @@ var is_hero: bool = false
 ## abilities of the active form are castable; a TRANSFORM ability flips it.
 var form: int = 0
 
+## How a bot positions this hero (AbilityData.STANCE_*), set from the kit at equip.
+## BRAWL (the default) closes to land a hit and shifts toward whichever form reaches;
+## KITE holds the kit's ranged poke and keeps an enemy at arm's length. Ignored for a
+## player-driven hero, which positions itself — a player hero just leaves it at BRAWL.
+var stance: int = 0
+
 ## The current form's resource pool: `resource` spent to cast (gated against
 ## `resource_max`), refilled by one point every `resource_regen_ticks` ticks
 ## (0 = no regen), counted by `resource_regen_counter`. The two forms keep separate
@@ -110,6 +116,7 @@ func clone() -> SimEntity:
 	copy.waypoint_index = waypoint_index
 	copy.is_hero = is_hero
 	copy.form = form
+	copy.stance = stance
 	copy.resource = resource
 	copy.resource_max = resource_max
 	copy.resource_regen_ticks = resource_regen_ticks

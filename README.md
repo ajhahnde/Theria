@@ -94,11 +94,12 @@ tribe fields your team while the opposing tribe fills the bots, so `--hero snake
 on the Verdani against the Solane, and the default lion keeps the Solane against the
 Verdani. Bots drive the other five seats. A hosted or joined match is still a
 one-hero-per-team duel on the lion until multi-hero play
-reaches the wire. Move the hero with **WASD** or the **arrow keys**; the bots close
-on the nearest enemy and cast their own kits — healing when hurt, otherwise firing
-the reachable ability of their form, and shifting form to keep a hit in reach
-(closing into the animal kit when an enemy slips inside the human poke, back to the
-human form to poke at range or heal). Cast its abilities with
+reaches the wire. Move the hero with **WASD** or the **arrow keys**; the bots fight to their kit's
+stance — brawlers close on the nearest enemy and shift into the form that keeps a hit
+in reach (into the animal kit when an enemy slips inside the human poke, back to the
+human form to poke or heal), while the skirmishers (Cheetah, Chameleon) hold their
+poke range and back off rather than melee — and all cast their own kits, healing when
+hurt and otherwise firing the reachable ability of their form. Cast its abilities with
 **1–4**, aimed at the mouse cursor — the hero shifts between a human and an animal
 form (shown by the ring around it, white or amber), each form a different set of
 abilities drawing on its own resource (the bar under the health bar). Abilities are
