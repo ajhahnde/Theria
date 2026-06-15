@@ -26,6 +26,10 @@ protocol version.
 
 ### Changed
 
+- The hero models read cleaner: their team-colour wash is lighter, so a dark animal (the
+  spider) keeps its own colour instead of drowning to near-black, and each hero's floating
+  bars now hang just above its own model — the short animals and the tall ones both read
+  tucked to the body rather than under one shared height that detached over the small ones.
 - The heroes now wear placeholder 3D models — a distinct low-poly animal per kit (lion,
   cheetah, hyena, snake, spider, chameleon) standing in for the species each shapeshifter
   takes — in place of the capsule bodies. The models come from mixed sources at different

@@ -91,13 +91,15 @@ const LIGHT_ENERGY := 1.1
 const CAM_HEIGHT := 880.0
 const CAM_BACK := 370.0
 
-## Billboarded HP/resource bars + status label floating above a unit (world units).
-## The *_Y constants are the height each floats at; creeps carry only a lower HP bar.
+## Billboarded HP/resource bars + status label floating above a unit (world units). A
+## hero's HP bar floats HERO_BAR_GAP above its own model's top (measured per kit, since
+## the animals vary in height) with the resource bar a step below and the status label a
+## step above; creeps and structures use their own fixed heights below.
 const BAR_WIDTH := 170.0
 const BAR_HEIGHT := 24.0
-const HP_BAR_Y := 250.0
-const RES_BAR_Y := 214.0
-const STATUS_LABEL_Y := 320.0
+const HERO_BAR_GAP := 70.0
+const RES_BAR_DROP := 36.0
+const STATUS_LABEL_RISE := 70.0
 const CREEP_BAR_Y := 130.0
 const HP_BAR_BG := Color(0.0, 0.0, 0.0, 0.55)
 const HP_BAR_FG := Color(0.4, 0.85, 0.4)
@@ -724,13 +726,14 @@ func _build_body(root: Node3D, entity: SimEntity) -> Node3D:
 ## resource bar and a status label for a hero. Creeps get only a lower HP bar.
 func _attach_overlay(view: Dictionary, entity: SimEntity) -> void:
 	var root: Node3D = view["root"]
-	var hp := _make_bar(HP_BAR_FG, _hp_bar_y(entity))
+	var hp_y := _hp_bar_y(entity, view["body"])
+	var hp := _make_bar(HP_BAR_FG, hp_y)
 	root.add_child(hp["node"])
 	view["hp_node"] = hp["node"]
 	view["hp_fg"] = hp["fg"]
 	if not entity.is_hero:
 		return
-	var res := _make_bar(RES_BAR_FG, RES_BAR_Y)
+	var res := _make_bar(RES_BAR_FG, hp_y - RES_BAR_DROP)
 	root.add_child(res["node"])
 	view["res_node"] = res["node"]
 	view["res_fg"] = res["fg"]
@@ -739,7 +742,7 @@ func _attach_overlay(view: Dictionary, entity: SimEntity) -> void:
 	label.no_depth_test = true
 	label.font_size = STATUS_FONT_SIZE
 	label.outline_size = STATUS_FONT_SIZE / 6
-	label.position = Vector3(0.0, STATUS_LABEL_Y, 0.0)
+	label.position = Vector3(0.0, hp_y + STATUS_LABEL_RISE, 0.0)
 	root.add_child(label)
 	view["status"] = label
 
@@ -857,13 +860,16 @@ func _body_half_height(entity: SimEntity) -> float:
 	return (CREEP_BODY_HEIGHT if entity.is_creep else HERO_BODY_HEIGHT) * 0.5
 
 
-## The height a unit's HP bar floats at — clear above its body for each footprint.
-func _hp_bar_y(entity: SimEntity) -> float:
+## The height a unit's HP bar floats at — clear above its body for each footprint. A
+## hero hangs its bar a fixed gap above its own model's measured top, so the short ones
+## (the chameleon) and the tall ones (the hyena) both read tucked just above the body
+## rather than under one shared height tuned to no animal in particular.
+func _hp_bar_y(entity: SimEntity, body: Node3D) -> float:
 	if entity.is_structure:
 		return STRUCTURE_HEIGHT + 70.0
 	if entity.is_creep:
 		return CREEP_BAR_Y
-	return HP_BAR_Y
+	return HeroModelLibrary.top_of(body) + HERO_BAR_GAP
 
 
 func _body_color(entity: SimEntity) -> Color:

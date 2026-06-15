@@ -25,8 +25,9 @@ const HERO_MODELS := {
 const HERO_MODEL_SIZE := 260.0
 
 ## The opacity of the team-colour wash overlaid on a model, strong enough to read blue
-## or red at a glance while the species texture still shows through underneath.
-const TEAM_TINT_ALPHA := 0.34
+## or red at a glance while the species texture still shows through underneath. Kept light
+## so an already-dark mesh (the spider) is tinted, not drowned to near-black.
+const TEAM_TINT_ALPHA := 0.25
 
 
 ## Whether `kit_id` has a placeholder model. Gate `add_to` on this — an unmodelled kit
@@ -45,6 +46,21 @@ static func add_to(parent: Node3D, kit_id: String, team_tint: Color) -> Node3D:
 	_normalize(model)
 	_tint(model, team_tint)
 	return model
+
+
+## The height of `body`'s top above its parent origin — the merged mesh bounds' max y,
+## measured in the parent's space so a normalised model's own ground-standing offset is
+## included. Lets the presenter float a hero's bars a fixed margin above whatever model
+## (or capsule) it wears instead of a one-size height that detaches over a small one.
+## `body` must be in the tree for its mesh transforms to resolve.
+static func top_of(body: Node3D) -> float:
+	var parent := body.get_parent() as Node3D
+	var inv := parent.global_transform.affine_inverse() if parent else Transform3D()
+	var top := 0.0
+	for mi in _meshes(body):
+		var box: AABB = inv * (mi.global_transform * mi.get_aabb())
+		top = maxf(top, box.position.y + box.size.y)
+	return top
 
 
 ## Scales `model` so its longest axis spans HERO_MODEL_SIZE, then offsets it so its
