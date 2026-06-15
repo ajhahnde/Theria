@@ -1,9 +1,20 @@
 <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <!-- Placeholder brand glyph: an ember 'A' on an ash field. Swap for the
-       rendered wordmark glyph once the brand art is finalised. -->
-  <rect width="128" height="128" rx="28" fill="#1d2025"/>
-  <g fill="none" stroke="#fb923c" stroke-width="11" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M40 98 L64 34 L88 98"/>
-    <path d="M50 74 L78 74"/>
+  <!-- Placeholder brand glyph: a geometric-sans 'T' (Theria) in jade over faint
+       jungle fronds on a cool dark field. Swap for the rendered wordmark glyph
+       once the brand art is finalised. -->
+  <defs>
+    <clipPath id="field"><rect width="128" height="128" rx="28"/></clipPath>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#11181a"/>
+  <!-- faint fronds, clipped to the rounded field -->
+  <g clip-path="url(#field)" fill="#34d399">
+    <path fill-opacity="0.10" d="M-5 130 C 30 110, 55 78, 62 28 C 42 74, 14 100, -5 130 Z"/>
+    <path fill-opacity="0.07" d="M-6 132 C 40 122, 82 112, 112 100 C 80 124, 40 132, -6 132 Z"/>
+    <path fill-opacity="0.08" d="M134 -5 C 112 26, 92 38, 70 48 C 96 30, 120 16, 134 -5 Z"/>
+  </g>
+  <!-- geometric-sans T: filled, even weight, flat ends -->
+  <g fill="#34d399">
+    <rect x="34" y="34" width="60" height="14"/>
+    <rect x="57" y="34" width="14" height="62"/>
   </g>
 </svg>

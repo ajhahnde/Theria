@@ -64,6 +64,10 @@ protocol version.
 
 ### Added
 
+- Right-clicking an enemy now attacks it: the hero closes to its attack range and the combat
+  step strikes it (LoL-style attack-on-click), while right-clicking open ground still just
+  walks there — one button both moves and engages. Client-side input only; the simulation and
+  the netcode protocol are unchanged.
 - Combat now reads on screen. Every hit — an auto-attack, an ability, or a venom tick — pops
   a floating damage number over the struck unit, so damage is legible instead of only a bar
   ticking down. Auto-attacks themselves now show: a ranged attacker (a tower, a skirmisher

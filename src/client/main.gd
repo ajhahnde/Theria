@@ -103,11 +103,6 @@ const DEFAULT_TRIBE := "solane"
 ## skeleton the netcode is built around until the multi-hero wire step lands.
 const DUEL_KIT := "lion"
 
-## Ability bar keys, one per slot (0..3) — QWER, the MOBA-standard bind. Movement is
-## click-to-move (right mouse), so the letter row is free for the kit. A held key recasts
-## the slot as soon as its cooldown and resource allow (quick-cast).
-const ABILITY_KEYS: Array[Key] = [KEY_Q, KEY_W, KEY_E, KEY_R]
-
 ## Form ring laid flat on the ground under a hero, reading its active shapeshifter
 ## form — white while human, amber while shifted to the animal form.
 const FORM_RING_RADIUS := 70.0
@@ -141,11 +136,9 @@ var _bot := BotController.new()
 var _hero_id: int = 0
 var _bot_id: int = 0
 
-## Click-to-move (LoL-style): the world point the player last right-clicked, the destination
-## the hero walks to; `_has_move_target` gates it (false = stand still). Resolved to a per-tick
-## `move_dir` on the client before it reaches the sim or the wire, so neither is changed.
-var _move_target: Vector2 = Vector2.ZERO
-var _has_move_target: bool = false
+## Samples the local player's mouse/keys into an InputCommand and owns the move/attack order
+## state (right-click to move or attack, QWER to cast). Built once the camera exists.
+var _player_input: PlayerInput = null
 ## The on-ground marker drawn at the active move target while the hero walks to it.
 var _move_marker: MoveMarker = null
 
@@ -624,6 +617,7 @@ func _build_world() -> void:
 	_camera.current = true
 	add_child(_camera)
 	_point_camera(MapData.BOUNDS.get_center())
+	_player_input = PlayerInput.new(_camera)
 	_move_marker = MoveMarker.new()
 	add_child(_move_marker)
 
@@ -650,8 +644,8 @@ func _sync_world() -> void:
 		CombatFx.strike(self, attack)
 	for hit in state.hit_events:
 		CombatFx.number(self, hit)
-	if _has_move_target:
-		_move_marker.point_at(_move_target)
+	if _player_input.has_move_target:
+		_move_marker.point_at(_player_input.move_target)
 	else:
 		_move_marker.clear()
 	_follow_camera(state)
@@ -886,87 +880,30 @@ func _hero_color(entity: SimEntity) -> Color:
 	return base.lightened(shade) if shade >= 0.0 else base.darkened(-shade)
 
 
-## Samples this tick's intent: a held right mouse button (re)sets the move destination to
-## the cursor point (click-to-move, hold-drag to steer); `_move_command_dir` turns it into
-## the tick's `move_dir` and the cast is layered on. The sim and wire still see an ordinary
-## per-tick direction — sourced from a click, not WASD.
+## This tick's player command — delegated to PlayerInput, handed the world the player acts on,
+## their hero, their team, and whether to sample casts (only with a local authoritative sim).
 func _sample_player_input() -> InputCommand:
-	var command := InputCommand.new()
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		_move_target = _mouse_world_point()
-		_has_move_target = true
-	command.move_dir = _move_command_dir()
-	_sample_ability(command)
-	return command
+	return _player_input.sample(
+		_visible_state(), _player_hero_entity(), _player_team(), _sim != null
+	)
 
 
-## Turns the standing move target into this tick's `move_dir` (click-to-move): a unit vector
-## toward it while far; once within a single tick's reach, a sub-unit vector that lands the
-## hero exactly on it (apply_movement scales a move_dir under length 1 down, so it stops on
-## the point instead of overshooting), clearing the target. No target or no hero holds still.
-func _move_command_dir() -> Vector2:
-	if not _has_move_target:
-		return Vector2.ZERO
-	var hero := _player_hero_entity()
-	if hero == null:
-		return Vector2.ZERO
-	var to_target := _move_target - hero.position
-	var step := hero.current_move_speed() * SimCore.TICK_DELTA
-	if step <= 0.0 or to_target.length() <= step:
-		_has_move_target = false
-		return to_target / step if step > 0.0 else Vector2.ZERO
-	return to_target.normalized()
-
-
-## The player's own hero — what the move target is measured from: the live sim entity where
-## this client owns authority (LOCAL/HOST), or our team's hero in the latest snapshot on a
-## pure CLIENT (the server still moves authoritatively from the direction we send). Null
-## before one exists.
-func _player_hero_entity() -> SimEntity:
+## The state the player acts on: the live sim where this client owns authority (LOCAL/HOST),
+## or the latest snapshot on a pure CLIENT. Null before one exists.
+func _visible_state() -> SimState:
 	if _mode == Mode.CLIENT:
-		var state := _net.latest_state() if _net != null else null
-		return _local_hero(state) if state != null else null
-	if _sim != null:
-		return _sim.state.get_entity(_hero_id)
-	return null
+		return _net.latest_state() if _net != null else null
+	return _sim.state if _sim != null else null
 
 
-## Layers ability-cast intent onto a movement command. Only with a local authoritative sim
-## (LOCAL/HOST): a pure CLIENT samples no abilities, as the wire carries movement alone and
-## networked casting is a later, protocol-versioned step. The pressed slot keys the cast; the
-## cursor is the aim point, and the enemy nearest it is the unit-target lock — the sim reads
-## whichever the cast ability needs.
-func _sample_ability(command: InputCommand) -> void:
-	if _sim == null:
-		return
-	var slot := _pressed_ability_slot()
-	if slot < 0:
-		return
-	var aim := _mouse_world_point()
-	command.ability_slot = slot
-	command.target_point = aim
-	command.target_id = AbilityExecutor.pick_unit_target(_sim.state, HERO_TEAM, aim)
+## The player's team — HERO_TEAM with local authority, the server-assigned team on a CLIENT.
+func _player_team() -> int:
+	return _my_team if _mode == Mode.CLIENT else HERO_TEAM
 
 
-## The point on the 2D field under the mouse: a ray from the camera through the cursor,
-## intersected with the ground plane (y = 0), returned in sim space. The aim a ground or
-## skillshot cast lands on, the cursor a unit-target cast locks nearest, and the click-to-move
-## destination.
-func _mouse_world_point() -> Vector2:
-	if _camera == null:
-		return Vector2.ZERO
-	var mouse := get_viewport().get_mouse_position()
-	var origin := _camera.project_ray_origin(mouse)
-	var dir := _camera.project_ray_normal(mouse)
-	if absf(dir.y) < 0.0001:
-		return Vector2(origin.x, origin.z)
-	var hit := origin + dir * (-origin.y / dir.y)
-	return Vector2(hit.x, hit.z)
-
-
-## The bar slot of the first held ability key (0..3), or -1 if none is down.
-func _pressed_ability_slot() -> int:
-	for slot in ABILITY_KEYS.size():
-		if Input.is_physical_key_pressed(ABILITY_KEYS[slot]):
-			return slot
-	return -1
+## The player's own hero, what movement is measured from: our team's hero in the visible state.
+func _player_hero_entity() -> SimEntity:
+	var state := _visible_state()
+	if state == null:
+		return null
+	return _local_hero(state) if _mode == Mode.CLIENT else state.get_entity(_hero_id)
