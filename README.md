@@ -86,11 +86,12 @@ godot --path .
 ```
 
 A connect screen opens: choose **Practice** for a single-machine match, **Host** to
-start a listen-server, or type an address and **Join** one. Practice fields the full
-Solane squad against the opposing Verdani squad — you drive one Solane hero (the lion
-by default, or pass `--hero cheetah`/`--hero hyena` on the command line), bots drive
-the rest. A hosted or joined match is still a one-hero-per-team duel on the lion until
-multi-hero play
+start a listen-server, or type an address and **Join** one. Practice is a Volk-vs-Volk
+match: `--hero` names the hero you drive — any hero of either Volk — and that hero's
+Volk fields your team while the opposing Volk fills the bots, so `--hero snake` puts you
+on the Verdani against the Solane, and the default lion keeps the Solane against the
+Verdani. Bots drive the other five seats. A hosted or joined match is still a
+one-hero-per-team duel on the lion until multi-hero play
 reaches the wire. Move the hero with **WASD** or the **arrow keys**; the bots close
 on the nearest enemy and cast their own kits — healing when hurt, otherwise firing
 the reachable ability of their form, and shifting form to keep a hit in reach
@@ -112,7 +113,7 @@ a role, since a menu cannot be driven without a display:
 godot --path . -- --host             # host the match (you are team 0)
 godot --path . -- --join 127.0.0.1   # join a host at an address (you are team 1)
 godot --path . -- --local            # a single-machine practice match, no menu
-godot --path . -- --local --hero cheetah   # practice driving a different Solane hero
+godot --path . -- --local --hero snake     # drive a Verdani hero (your team fields the Verdani)
 ```
 
 The host is authoritative and fills any empty player slot with a bot. The joining

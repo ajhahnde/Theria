@@ -72,15 +72,14 @@ const CREEP_HP_BAR_OFFSET := Vector2(-35.0, -55.0)
 const HP_BAR_BG := Color(0.0, 0.0, 0.0, 0.6)
 const HP_BAR_FG := Color(0.4, 0.85, 0.4)
 
-## The two Volk a LOCAL practice match fields, one hero per kit (see AbilityData): the
-## player's squad draws the Solane, the bot squad the opposing Verdani, so a single
-## match exercises both rosters and all four targeting modes. The player drives one
-## Solane hero — picked with `--hero`, default the first — and every other seat on both
-## teams is bot-driven. HOST/CLIENT still seat the one-per-team duel (DUEL_KIT below):
-## the wire identifies a hero by its team, so a networked squad waits on the protocol
-## step that gives each client a controlled-entity id.
-const SOLANE_ROSTER: Array[String] = ["lion", "cheetah", "hyena"]
-const VERDANI_ROSTER: Array[String] = ["snake", "spider", "chameleon"]
+## The Volk the player's team falls back to in a LOCAL practice match when `--hero`
+## names no known hero. The rosters themselves live in `AbilityData.VOLK` — the single
+## source of which heroes form which Volk — and `_start_local` seats the player's chosen
+## Volk against the opposing one, so the match exercises both rosters and all four
+## targeting modes. HOST/CLIENT still seat the one-per-team duel (DUEL_KIT below): the
+## wire identifies a hero by its team, so a networked squad waits on the protocol step
+## that gives each client a controlled-entity id.
+const DEFAULT_VOLK := "solane"
 
 ## The kit both heroes mirror in a HOST/CLIENT duel — the one-per-team walking
 ## skeleton the netcode is built around until the multi-hero wire step lands.
@@ -128,10 +127,11 @@ var _bot := BotController.new()
 var _hero_id: int = 0
 var _bot_id: int = 0
 
-## LOCAL: the kit the player drives, from `--hero` (a Solane roster name); falls
-## back to the roster's first if unset or unrecognised. Ignored by HOST/CLIENT,
-## which seat the duel.
-var _player_hero := SOLANE_ROSTER[0]
+## LOCAL: the hero the player drives, from `--hero` — any hero of either Volk. Its
+## Volk fills the player's team and the opposing Volk the bot team, so the choice also
+## picks the match-up. Falls back to the first hero of the default Volk if unset or
+## unrecognised. Ignored by HOST/CLIENT, which seat the duel.
+var _player_hero: String = AbilityData.VOLK[DEFAULT_VOLK][0]
 ## LOCAL: every bot-driven hero this match — the player's two squadmates and the
 ## three opponents — each stepped from its own BotController decision.
 var _bot_ids: Array[int] = []
@@ -290,13 +290,25 @@ func _close_menu_and_enter() -> void:
 	_enter_match()
 
 
-## Practice: the player's team fields the full Solane squad, the bot team the opposing
-## Verdani squad, one hero per roster kit. The player drives the Solane seat picked by
-## `--hero`; the other five are bot-driven, so both rosters are on the field at once.
+## Practice: a Volk-vs-Volk match. `--hero` names the hero the player drives; that
+## hero's Volk (per `AbilityData.VOLK`) fills the player's team and the opposing Volk the
+## bot team, one hero per roster kit. The player drives the matching seat; the other five
+## are bot-driven, so both rosters are on the field at once. An unknown name falls back
+## to the default Volk's first hero, so a typo starts a valid match instead of crashing.
 func _start_local() -> void:
 	_sim = _new_world()
-	_seat_squad(HERO_TEAM, HERO_SPEED, SOLANE_ROSTER, _player_slot())
-	_seat_squad(BOT_TEAM, BOT_SPEED, VERDANI_ROSTER, -1)
+	var player_volk := AbilityData.volk_of(_player_hero)
+	if player_volk == "":
+		var fallback: String = AbilityData.VOLK[DEFAULT_VOLK][0]
+		push_warning("unknown --hero %s; defaulting to %s" % [_player_hero, fallback])
+		_player_hero = fallback
+		player_volk = DEFAULT_VOLK
+	var player_roster: Array[String] = []
+	player_roster.assign(AbilityData.VOLK[player_volk])
+	var bot_roster: Array[String] = []
+	bot_roster.assign(AbilityData.VOLK[AbilityData.opposing_volk(player_volk)])
+	_seat_squad(HERO_TEAM, HERO_SPEED, player_roster, player_roster.find(_player_hero))
+	_seat_squad(BOT_TEAM, BOT_SPEED, bot_roster, -1)
 
 
 ## Seats one hero per kit in `roster` for `team`, each fanned across the base fountain
@@ -311,17 +323,6 @@ func _seat_squad(team: int, speed: float, roster: Array[String], player_slot: in
 			_hero_id = id
 		else:
 			_bot_ids.append(id)
-
-
-## The roster index the player drives, resolved from `--hero`. An unset or
-## unrecognised name falls back to the first kit (with a warning), so a typo starts
-## a valid match instead of crashing.
-func _player_slot() -> int:
-	var slot := SOLANE_ROSTER.find(_player_hero)
-	if slot < 0:
-		push_warning("unknown --hero %s; defaulting to %s" % [_player_hero, SOLANE_ROSTER[0]])
-		return 0
-	return slot
 
 
 ## The HOST/CLIENT walking skeleton: exactly one hero per team, both mirroring the

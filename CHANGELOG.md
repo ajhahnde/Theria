@@ -35,6 +35,11 @@ protocol version.
 
 ### Added
 
+- A practice match is now a Volk-versus-Volk choice: `--hero` accepts any hero of either
+  Volk, and the chosen hero's Volk fields the player's team while the opposing Volk fills
+  the bots — so the Verdani are now playable, not just an opponent. The default still
+  seats the Solane against the Verdani. Which heroes form which Volk is recorded once in
+  the ability catalog and read by the client, so the rosters cannot drift apart.
 - A second hero roster, the **Verdani** — jungle venom-and-shadow shifters (snake,
   spider, chameleon) — joins the Solane as the opposing Volk, authored on the same
   ability primitives as a deliberate foil: the snake is a venom striker with the

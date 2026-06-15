@@ -693,6 +693,17 @@ const KITS := {
 }
 
 
+## The Völker: each Volk's hero roster, in seating order. The single source of which
+## heroes form which Volk — the client reads it to seat a Volk-vs-Volk match, and the
+## roster order fixes each hero's squad slot. The wildkin reference kit is deliberately
+## in no Volk. v0.1 ships two Völker; a match pairs one against another (see
+## `opposing_volk`).
+const VOLK := {
+	"solane": ["lion", "cheetah", "hyena"],
+	"verdani": ["snake", "spider", "chameleon"],
+}
+
+
 ## The typed spec for a catalog id. Parses the row on demand — the catalog is small
 ## and the executor caches nothing, so a spec is always read fresh by value.
 static func spec(id: int) -> AbilitySpec:
@@ -707,3 +718,22 @@ static func has_ability(id: int) -> bool:
 ## A kit definition by id, or an empty dictionary if unknown.
 static func kit(kit_id: String) -> Dictionary:
 	return KITS.get(kit_id, {})
+
+
+## The Volk a hero kit belongs to, or "" if the kit is in no Volk (the wildkin reference
+## kit, or an unknown name). A pure lookup over the roster data.
+static func volk_of(kit_id: String) -> String:
+	for volk in VOLK:
+		if (VOLK[volk] as Array).has(kit_id):
+			return volk
+	return ""
+
+
+## The Volk a given Volk is matched against — the next other Volk in declaration order.
+## v0.1 fields exactly two, so this is simply "the other one"; returns `volk` itself if
+## it is the only Volk defined.
+static func opposing_volk(volk: String) -> String:
+	for other in VOLK:
+		if other != volk:
+			return other
+	return volk
