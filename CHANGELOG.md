@@ -35,6 +35,12 @@ protocol version.
 
 ### Added
 
+- Bots now shapeshift mid-fight instead of fighting from one form: a bot transforms
+  toward the form that can land a hit when its current one cannot — closing into its
+  harder-hitting animal kit as an enemy slips inside the human poke's range, and back
+  to the human form to poke at range — and a hurt bot in animal form shifts back to
+  the human form for its heal when one is ready. The transform's own cooldown keeps
+  the stance from flip-flopping. This unlocks the animal kits in a practice match.
 - Bots now cast their hero kit, not just walk: a bot heals itself when its health
   drops and otherwise fires the first damaging ability of its active form that can
   actually reach its target, picking the aim the way a player would. The reach test

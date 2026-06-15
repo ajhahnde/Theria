@@ -3,11 +3,14 @@ extends RefCounted
 ## Produces an InputCommand for a bot-controlled entity from the world state.
 ##
 ## v0.1 behaviour: walk toward the nearest enemy, stop on contact, and — once the
-## entity is a kitted hero — cast its abilities. The bot heals itself when hurt,
-## otherwise fires the first damaging ability of its active form that can actually
-## reach the target. Deterministic — a pure function of the state — so a bot match
-## replays identically and feeds the same simulation core a human would, gating on
-## the very `AbilityExecutor.can_cast` the player's casts pass through.
+## entity is a kitted hero — cast its abilities. The bot shifts into the stance that
+## suits the fight (closing into its animal kit when an enemy slips inside the human
+## poke's reach, falling back to the human form to poke at range or to heal when
+## hurt), heals itself when hurt, and otherwise fires the first damaging ability of
+## its active form that can actually reach the target.
+## Deterministic — a pure function of the state — so a bot match replays identically
+## and feeds the same simulation core a human would, gating every cast (a transform
+## included) on the very `AbilityExecutor.can_cast` the player's casts pass through.
 
 ## Stop advancing once within this many world units of the target.
 const STOP_RANGE := 60.0
@@ -17,7 +20,8 @@ const STOP_RANGE := 60.0
 const SLOT_COUNT := 4
 
 ## Heal once health falls below this fraction of the maximum — soon enough to
-## matter in a trade, but not so eager the bot tops off a scratch every tick.
+## matter in a trade, but not so eager the bot tops off a scratch every tick. The
+## same threshold tells the bot when to favour the human form for its heal.
 const HEAL_HP_FRACTION := 0.6
 
 
@@ -38,45 +42,116 @@ func decide(state: SimState, bot_id: int) -> InputCommand:
 
 
 ## Layers an ability cast onto the bot's command when one is worth casting this
-## tick: a self-heal first when the bot is hurt and can afford one, otherwise the
-## first damaging ability of its active form that can land on `target`. Reads the
-## same state the player's input sampler does and gates on the same cast rules, so a
-## bot's casts stay pure and replayable. The bot fights from its starting form;
-## transforming into the animal kit is a later step.
+## tick. Stance comes first: when the bot would fight better in its other form it
+## transforms — gated like every cast, so a bot still on transform cooldown simply
+## fights on where it is. Otherwise it self-heals when hurt and can afford one, else
+## fires the first damaging ability of its active form that lands on `target`. Reads
+## the same state the player's input sampler does and gates on the same cast rules,
+## so a bot's casts stay pure and replayable.
 func _choose_cast(command: InputCommand, bot: SimEntity, target: SimEntity) -> void:
-	var slots: Dictionary = bot.kit.get(bot.form, {})
-	if bot.max_hp > 0 and bot.hp < int(float(bot.max_hp) * HEAL_HP_FRACTION):
-		var heal_slot := _castable_slot(bot, slots, AbilitySpec.EFFECT_HEAL, target)
+	if _preferred_form(bot, target) != bot.form:
+		var transform_slot := _castable_slot(bot, bot.form, AbilitySpec.EFFECT_TRANSFORM, target)
+		if transform_slot >= 0:
+			command.ability_slot = transform_slot
+			return
+	if _is_hurt(bot):
+		var heal_slot := _castable_slot(bot, bot.form, AbilitySpec.EFFECT_HEAL, target)
 		if heal_slot >= 0:
 			command.ability_slot = heal_slot
 			return
-	var damage_slot := _castable_slot(bot, slots, AbilitySpec.EFFECT_DAMAGE, target)
+	var damage_slot := _castable_slot(bot, bot.form, AbilitySpec.EFFECT_DAMAGE, target)
 	if damage_slot >= 0:
 		command.ability_slot = damage_slot
 		command.target_point = target.position
 		command.target_id = target.id
 
 
-## The lowest slot in `slots` whose ability has `effect`, passes the cast gate
-## (form, resource, cooldown), and — for a damaging ability — can reach `target`.
-## -1 when none qualifies. A heal is self-cast, so it needs no reach check.
-func _castable_slot(bot: SimEntity, slots: Dictionary, effect: int, target: SimEntity) -> int:
+## The form the bot would rather fight this target in. Survival comes first: a hurt
+## bot in the animal form wants the human form's heal (the animal kits carry none),
+## but only when that heal is off cooldown — cooldowns persist across a transform,
+## so the bot reads it from either stance, and it never flips toward a heal still
+## recharging. Otherwise it shifts on reach: to the other form when its current one
+## cannot land a damaging ability but the other could — closing into the animal kit
+## as an enemy slips inside the human skillshot's range, and back to the human poke
+## when the enemy outruns the animal kit — and stays put when it can already hit.
+## The transform's own cooldown bounds how often this flips, so the pulls (engage,
+## disengage, retreat to heal) cannot thrash tick to tick.
+func _preferred_form(bot: SimEntity, target: SimEntity) -> int:
+	var other := 1 - bot.form
+	if (
+		bot.form != AbilitySpec.FORM_HUMAN
+		and _is_hurt(bot)
+		and _form_has_ready_heal(bot, AbilitySpec.FORM_HUMAN)
+	):
+		return AbilitySpec.FORM_HUMAN
+	if (
+		not _form_reaches_with_damage(bot, bot.form, target)
+		and _form_reaches_with_damage(bot, other, target)
+	):
+		return other
+	return bot.form
+
+
+## Whether the bot is hurt enough to want a heal — health under `HEAL_HP_FRACTION`
+## of its maximum. A non-combat entity (max_hp 0) is never hurt.
+func _is_hurt(bot: SimEntity) -> bool:
+	return bot.max_hp > 0 and bot.hp < int(float(bot.max_hp) * HEAL_HP_FRACTION)
+
+
+## The lowest slot in the bot's `form` bar whose ability has `effect`, passes the
+## cast gate (form, resource, cooldown), and — for a damaging ability — can reach
+## `target`. -1 when none qualifies. A heal is self-cast and a transform self-aimed,
+## so neither needs a reach check.
+func _castable_slot(bot: SimEntity, form: int, effect: int, target: SimEntity) -> int:
 	var dist := bot.position.distance_to(target.position)
-	for slot in SLOT_COUNT:
-		if not slots.has(slot):
-			continue
-		var ability_id: int = slots[slot]
-		if not AbilityData.has_ability(ability_id):
-			continue
-		var spec := AbilityData.spec(ability_id)
+	for spec in _form_specs(bot, form):
 		if spec.effect != effect:
 			continue
 		if not AbilityExecutor.can_cast(bot, spec):
 			continue
 		if effect == AbilitySpec.EFFECT_DAMAGE and not _reaches(spec, dist):
 			continue
-		return slot
+		return spec.slot
 	return -1
+
+
+## Whether `form`'s bar holds a heal that is off cooldown right now. Reads the
+## cooldown (which survives a transform, keyed by ability id) but neither the
+## resource nor the active form, so it answers "would flipping to this form give me
+## a heal to cast" from either stance — the resource is left to the post-transform
+## cast gate.
+func _form_has_ready_heal(bot: SimEntity, form: int) -> bool:
+	for spec in _form_specs(bot, form):
+		if spec.effect == AbilitySpec.EFFECT_HEAL and bot.ability_cooldowns.get(spec.id, 0) == 0:
+			return true
+	return false
+
+
+## Whether `form`'s bar holds a damaging ability whose geometry would land on a
+## target `dist` away — the "is this stance's payoff in reach" test that drives a
+## transform. Geometry only: it ignores resource and cooldown (which the form swap
+## changes), leaving those to the cast gate once the bot is in that form.
+func _form_reaches_with_damage(bot: SimEntity, form: int, target: SimEntity) -> bool:
+	var dist := bot.position.distance_to(target.position)
+	for spec in _form_specs(bot, form):
+		if spec.effect == AbilitySpec.EFFECT_DAMAGE and _reaches(spec, dist):
+			return true
+	return false
+
+
+## The abilities on `form`'s bar, lowest slot first — the specs the form's slot ids
+## resolve to, skipping empty slots and ids absent from the catalog. Slot order
+## keeps every scan over a form deterministic, like the rest of the simulation.
+func _form_specs(bot: SimEntity, form: int) -> Array[AbilitySpec]:
+	var specs: Array[AbilitySpec] = []
+	var slots: Dictionary = bot.kit.get(form, {})
+	for slot in SLOT_COUNT:
+		if not slots.has(slot):
+			continue
+		var ability_id: int = slots[slot]
+		if AbilityData.has_ability(ability_id):
+			specs.append(AbilityData.spec(ability_id))
+	return specs
 
 
 ## Whether a cast of `spec` aimed straight at an enemy `dist` away would actually
