@@ -1,20 +1,21 @@
 <svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <!-- Placeholder brand glyph: a geometric-sans 'T' (Theria) in jade over faint
-       jungle fronds on a cool dark field. Swap for the rendered wordmark glyph
-       once the brand art is finalised. -->
+  <!-- Brand glyph: a Herculanum 'T' (Theria) on a cool dark field, carrying a
+       savanna->jungle gradient (warm Solane gold -> cool Verdani cyan). Real
+       Herculanum glyph outline, extracted via CoreText. Swap for the finished
+       wordmark once the brand art is locked. -->
   <defs>
-    <clipPath id="field"><rect width="128" height="128" rx="28"/></clipPath>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#16231e"/>
+      <stop offset="1" stop-color="#0d1214"/>
+    </radialGradient>
+    <linearGradient id="tg" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0"    stop-color="#fbbf24"/>
+      <stop offset="0.45" stop-color="#34d399"/>
+      <stop offset="1"    stop-color="#22d3ee"/>
+    </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="28" fill="#11181a"/>
-  <!-- faint fronds, clipped to the rounded field -->
-  <g clip-path="url(#field)" fill="#34d399">
-    <path fill-opacity="0.10" d="M-5 130 C 30 110, 55 78, 62 28 C 42 74, 14 100, -5 130 Z"/>
-    <path fill-opacity="0.07" d="M-6 132 C 40 122, 82 112, 112 100 C 80 124, 40 132, -6 132 Z"/>
-    <path fill-opacity="0.08" d="M134 -5 C 112 26, 92 38, 70 48 C 96 30, 120 16, 134 -5 Z"/>
-  </g>
-  <!-- geometric-sans T: filled, even weight, flat ends -->
-  <g fill="#34d399">
-    <rect x="34" y="34" width="60" height="14"/>
-    <rect x="57" y="34" width="14" height="62"/>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <g transform="translate(36.83,31.00) scale(1.2048)" fill="url(#tg)">
+    <path d="M6.20 6.60 L17.60 6.60 Q18.10 11.10 18.20 15.40 Q18.30 19.70 18.30 24.20 Q18.30 29.50 18.05 33.30 Q17.80 37.10 17.55 39.70 Q17.30 42.30 17.05 43.90 Q16.80 45.50 16.80 46.50 Q16.80 48.30 17.70 50.35 Q18.60 52.40 20.30 54.15 Q22.00 55.90 24.35 57.00 Q26.70 58.10 29.70 58.10 Q31.20 58.10 33.15 57.40 Q35.10 56.70 36.20 55.90 Q37.10 55.10 37.10 53.60 Q37.10 53.00 36.95 52.25 Q36.80 51.50 36.10 51.50 Q35.60 51.50 34.55 51.65 Q33.50 51.80 32.80 51.80 Q30.20 51.80 28.50 51.00 Q26.80 50.20 25.85 48.95 Q24.90 47.70 24.50 46.15 Q24.10 44.60 24.10 43.00 Q24.10 35.90 24.25 30.35 Q24.40 24.80 24.65 20.40 Q24.90 16.00 25.25 12.55 Q25.60 9.10 26.10 6.20 Q27.50 6.20 29.30 6.20 Q31.20 6.20 33.20 6.10 Q35.20 6.00 37.15 5.90 Q39.10 5.80 40.60 5.60 Q41.30 5.50 42.10 5.00 Q42.90 4.50 43.55 3.80 Q44.20 3.10 44.65 2.45 Q45.10 1.80 45.10 1.40 Q45.10 0.00 43.60 0.00 Q38.10 0.00 32.60 0.40 Q27.10 0.80 21.60 0.80 Q17.40 0.80 14.40 0.65 Q11.40 0.50 9.25 0.35 Q7.10 0.20 5.60 0.10 Q4.10 0.00 3.00 0.00 Q2.10 0.00 1.05 1.10 Q0.00 2.20 0.00 3.00 Q0.00 4.30 0.60 5.55 Q1.20 6.80 2.40 6.80 Q3.40 6.80 4.35 6.70 Q5.30 6.60 6.20 6.60 Z"/>
   </g>
 </svg>
