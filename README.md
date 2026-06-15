@@ -2,14 +2,14 @@
 
 <img src="icon.svg" alt="Theria" width="96">
 
-<h1>Theria</h1>
+<h1><img src="wordmark.svg" alt="Theria" height="56"></h1>
 
 <h3>Shapeshifter tribes clash over the savanna and the jungle — fight as both human and beast</h3>
 
 <p>
   <a href="https://github.com/ajhahnde/Theria/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/ajhahnde/Theria/ci.yml?branch=main&style=flat-square&label=ci" alt="CI"></a>
-  <img src="https://img.shields.io/badge/version-v0.1.0-f97316?style=flat-square" alt="Version">
-  <img src="https://img.shields.io/badge/status-pre--alpha-f97316?style=flat-square" alt="Status">
+  <img src="https://img.shields.io/badge/version-v0.1.0-059669?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/status-pre--alpha-059669?style=flat-square" alt="Status">
   <img src="https://img.shields.io/badge/engine-Godot%204.6-lightgrey?style=flat-square" alt="Godot 4.6">
   <img src="https://img.shields.io/badge/license-Apache--2.0-lightgrey?style=flat-square" alt="License">
 </p>
