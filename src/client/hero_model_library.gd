@@ -19,6 +19,17 @@ const HERO_MODELS := {
 	"chameleon": "res://assets/models/heroes/chameleon.glb",
 }
 
+## The non-hero field props that now wear models too — lane creeps and the two structure
+## kinds — keyed by a prop name the presenter passes (`creep`/`tower`/`nexus`). Each entry
+## carries its glTF and the on-field size its longest axis is scaled to, so a creep reads
+## small under the heroes while a tower stands imposing over them. Same low-poly source
+## family (Quaternius / iPoly3D, all CC0) as the hero animals, credited in CREDITS.md.
+const PROP_MODELS := {
+	"creep": {"path": "res://assets/models/creeps/slime.glb", "size": 120.0},
+	"tower": {"path": "res://assets/models/structures/tower.glb", "size": 460.0},
+	"nexus": {"path": "res://assets/models/structures/nexus.glb", "size": 360.0},
+}
+
 ## The world size a model's longest axis is scaled to, so every model reads at one size
 ## on the field regardless of the units it was authored in. Sized a touch above the
 ## capsule it replaces so the species is legible from the follow-camera.
@@ -28,6 +39,11 @@ const HERO_MODEL_SIZE := 260.0
 ## or red at a glance while the species texture still shows through underneath. Kept light
 ## so an already-dark mesh (the spider) is tinted, not drowned to near-black.
 const TEAM_TINT_ALPHA := 0.25
+
+## The heavier wash a structure or creep takes — a prop has no species identity of its own
+## to protect, so it leans harder into the team colour than a hero does, reading blue/red
+## at a glance from across the lane.
+const PROP_TINT_ALPHA := 0.4
 
 ## The yaw, in radians, that turns a kit's model to face its movement direction once the
 ## presenter has aimed its length axis down the move vector. The land animals are all
@@ -126,8 +142,23 @@ static func add_to(parent: Node3D, kit_id: String, team_tint: Color) -> Node3D:
 	var packed := load(HERO_MODELS[kit_id]) as PackedScene
 	var model := packed.instantiate() as Node3D
 	parent.add_child(model)
-	_normalize(model)
-	_tint(model, team_tint)
+	_normalize(model, HERO_MODEL_SIZE)
+	_tint(model, team_tint, TEAM_TINT_ALPHA)
+	return model
+
+
+## Instances a field prop's model (`prop` is a `PROP_MODELS` key — `creep`/`tower`/`nexus`)
+## under `parent`, normalised to that prop's size and washed with the heavier prop tint, and
+## returns it. Mirrors `add_to` for the non-hero field: a creep or a structure stands on the
+## ground at a consistent size instead of a debug capsule or box. `parent` must be in the
+## tree for the bounds measurement.
+static func add_prop(parent: Node3D, prop: String, team_tint: Color) -> Node3D:
+	var def: Dictionary = PROP_MODELS[prop]
+	var packed := load(def["path"]) as PackedScene
+	var model := packed.instantiate() as Node3D
+	parent.add_child(model)
+	_normalize(model, def["size"])
+	_tint(model, team_tint, PROP_TINT_ALPHA)
 	return model
 
 
@@ -146,16 +177,16 @@ static func top_of(body: Node3D) -> float:
 	return top
 
 
-## Scales `model` so its longest axis spans HERO_MODEL_SIZE, then offsets it so its
-## footprint is centred on the parent origin and its base rests on the ground (y = 0).
-## The models arrive at wildly different authored scales, so this is what makes every
-## hero read at one size.
-static func _normalize(model: Node3D) -> void:
+## Scales `model` so its longest axis spans `size`, then offsets it so its footprint is
+## centred on the parent origin and its base rests on the ground (y = 0). The models arrive
+## at wildly different authored scales, so this is what makes every one read at its intended
+## on-field size — a common size for the heroes, a per-prop size for creeps and structures.
+static func _normalize(model: Node3D, size: float) -> void:
 	var aabb := _model_aabb(model)
 	var longest := maxf(aabb.size.x, maxf(aabb.size.y, aabb.size.z))
 	if longest <= 0.0:
 		return
-	var s := HERO_MODEL_SIZE / longest
+	var s := size / longest
 	model.scale = Vector3(s, s, s)
 	var center := aabb.get_center()
 	model.position = Vector3(-center.x * s, -aabb.position.y * s, -center.z * s)
@@ -178,11 +209,12 @@ static func _model_aabb(model: Node3D) -> AABB:
 	return out
 
 
-## Lays a translucent `color` overlay over every mesh in `model`, tinting it toward its
-## team without replacing the model's own material, so the species texture stays visible.
-static func _tint(model: Node3D, color: Color) -> void:
+## Lays a translucent `color` overlay (at opacity `alpha`) over every mesh in `model`,
+## tinting it toward its team without replacing the model's own material, so the underlying
+## texture stays visible. A hero takes a light wash to keep its species; a prop a heavier one.
+static func _tint(model: Node3D, color: Color, alpha: float) -> void:
 	var wash := color
-	wash.a = TEAM_TINT_ALPHA
+	wash.a = alpha
 	var overlay := StandardMaterial3D.new()
 	overlay.albedo_color = wash
 	overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

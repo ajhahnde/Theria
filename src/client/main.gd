@@ -30,8 +30,8 @@ extends Node3D
 
 enum Mode { LOCAL, HOST, CLIENT }
 
-const HERO_SPEED := 320.0
-const BOT_SPEED := 300.0
+const HERO_SPEED := 215.0
+const BOT_SPEED := 200.0
 const HERO_TEAM := 0
 const BOT_TEAM := 1
 
@@ -52,7 +52,7 @@ const BOT_COLOR := Color(1.0, 0.42, 0.38)
 ## wave member gets, so a wave reads as a cluster apart from the heroes.
 const ENTITY_RADIUS := 44.0
 const HERO_BODY_HEIGHT := 150.0
-const CREEP_RADIUS := 22.0
+const CREEP_RADIUS := 31.0
 const CREEP_BODY_HEIGHT := 80.0
 const CREEP_DARKEN := 0.3
 
@@ -85,15 +85,14 @@ const CAM_BACK := 370.0
 ## the jerk out of a sharp turn or a respawn. Eyeball-tunable alongside the height/back above.
 const CAM_LERP := 0.2
 
-## Billboarded HP/resource bars + status label floating above a unit (world units). A hero's
-## HP bar floats HERO_BAR_GAP above its own model's measured top (animals vary in height),
-## the resource bar a step below and the status label a step above; creeps/structures fixed.
+## Billboarded HP/resource bars + status label floating above a unit (world units). Every
+## body's HP bar floats HERO_BAR_GAP above its own model's measured top (animals, creeps, and
+## structures all vary in height), the resource bar a step below and the status label above.
 const BAR_WIDTH := 170.0
 const BAR_HEIGHT := 24.0
 const HERO_BAR_GAP := 70.0
 const RES_BAR_DROP := 36.0
 const STATUS_LABEL_RISE := 70.0
-const CREEP_BAR_Y := 130.0
 const HP_BAR_BG := Color(0.0, 0.0, 0.0, 0.55)
 const HP_BAR_FG := Color(0.4, 0.85, 0.4)
 const RES_BAR_FG := Color(0.35, 0.6, 0.95)
@@ -628,6 +627,7 @@ func _build_world() -> void:
 	_ground.position = _world(MapData.BOUNDS.get_center())
 	_ground.material_override = _flat_material(GROUND_COLOR)
 	add_child(_ground)
+	MapView.build(self)
 	_camera = Camera3D.new()
 	_camera.far = 20000.0
 	_camera.current = true
@@ -743,15 +743,21 @@ func _make_view(entity: SimEntity) -> Dictionary:
 	return view
 
 
-## Builds an entity's body under `root`: a size-normalised animal model for a hero whose
-## kit has one (handed off to HeroModelLibrary), or a primitive (capsule unit, box
-## structure) otherwise. Returned so the view can hold it, though the body is never
-## mutated again once built — team and form read off the tint and the ring, not the body.
-## A pure CLIENT whose snapshot carried no `kit_id` falls through to the capsule, so an
+## Builds an entity's body under `root`: a size-normalised model — the hero's animal (by
+## kit), a structure's tower/nexus, or a lane creep's slime — handed off to
+## HeroModelLibrary, which stands it on the ground at its on-field size and washes it with
+## the team colour. Returned so the view can hold it, though the body is never mutated
+## again once built — team and form read off the tint and the ring, not the body. Only a
+## pure CLIENT hero whose snapshot carried no `kit_id` falls through to the capsule, so an
 ## unmodelled hero still draws.
 func _build_body(root: Node3D, entity: SimEntity) -> Node3D:
 	if entity.is_hero and HeroModelLibrary.has_model(entity.kit_id):
 		return HeroModelLibrary.add_to(root, entity.kit_id, _team_color(entity.team))
+	if entity.is_structure:
+		var prop := "nexus" if entity.is_nexus else "tower"
+		return HeroModelLibrary.add_prop(root, prop, _team_color(entity.team))
+	if entity.is_creep:
+		return HeroModelLibrary.add_prop(root, "creep", _team_color(entity.team).darkened(CREEP_DARKEN))
 	var body := MeshInstance3D.new()
 	body.mesh = _body_mesh(entity)
 	body.position = Vector3(0.0, _body_half_height(entity), 0.0)
@@ -764,7 +770,7 @@ func _build_body(root: Node3D, entity: SimEntity) -> Node3D:
 ## resource bar and a status label for a hero. Creeps get only a lower HP bar.
 func _attach_overlay(view: Dictionary, entity: SimEntity) -> void:
 	var root: Node3D = view["root"]
-	var hp_y := _hp_bar_y(entity, view["body"])
+	var hp_y := _hp_bar_y(view["body"])
 	var hp := _make_bar(HP_BAR_FG, hp_y)
 	root.add_child(hp["node"])
 	view["hp_node"] = hp["node"]
@@ -863,15 +869,12 @@ func _body_half_height(entity: SimEntity) -> float:
 	return (CREEP_BODY_HEIGHT if entity.is_creep else HERO_BODY_HEIGHT) * 0.5
 
 
-## The height a unit's HP bar floats at — clear above its body for each footprint. A
-## hero hangs its bar a fixed gap above its own model's measured top, so the short ones
-## (the chameleon) and the tall ones (the hyena) both read tucked just above the body
-## rather than under one shared height tuned to no animal in particular.
-func _hp_bar_y(entity: SimEntity, body: Node3D) -> float:
-	if entity.is_structure:
-		return STRUCTURE_HEIGHT + 70.0
-	if entity.is_creep:
-		return CREEP_BAR_Y
+## The height a unit's HP bar floats at — a fixed gap above its own model's measured top, so
+## a short body (the chameleon, a slime creep) and a tall one (the hyena, a tower) both read
+## with the bar tucked just above them rather than at one shared height tuned to nothing in
+## particular. Every field body is now a model, so the one measured-top rule covers heroes,
+## creeps, and structures alike; only the pure-CLIENT capsule fallback has no model to measure.
+func _hp_bar_y(body: Node3D) -> float:
 	return HeroModelLibrary.top_of(body) + HERO_BAR_GAP
 
 

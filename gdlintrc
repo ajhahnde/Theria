@@ -1,0 +1,8 @@
+# gdlint config — only deviation from gdtoolkit defaults below; everything else
+# stays default (gdlint merges this over the built-in defaults).
+#
+# max-public-methods 20 -> 30: the cohesion rule targets production classes
+# (largest src file holds 13 public methods), but each GUT test file accrues
+# one public method per test_* case and legitimately passes 20. 30 gives the
+# suite headroom without weakening src, which stays well under 20.
+max-public-methods: 30

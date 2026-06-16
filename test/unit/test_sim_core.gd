@@ -183,17 +183,37 @@ func test_nexus_destruction_sets_the_winner_and_freezes_the_match() -> void:
 func test_spawn_structures_is_mirror_fair() -> void:
 	var sim := SimCore.new()
 	sim.spawn_structures()
-	# Every team 0 structure must have a team 1 structure at the negated position
+	# Every team 0 structure must have a team 1 structure at the axially mirrored position
 	# with the same role and health, so neither side starts ahead.
 	for id in sim.state.entities:
 		var s: SimEntity = sim.state.entities[id]
 		if s.team != 0:
 			continue
-		var mirror := _structure_at(sim.state, 1, -s.position)
+		var mirror := _structure_at(sim.state, 1, MapData.mirror(s.position))
 		assert_not_null(mirror, "team 0's structure must have a mirrored team 1 counterpart")
 		if mirror != null:
 			assert_eq(mirror.is_nexus, s.is_nexus, "the mirrored structure must share its role")
 			assert_eq(mirror.max_hp, s.max_hp, "the mirrored structure must share its health")
+
+
+func test_spawn_structures_gives_each_team_a_nexus_and_four_towers() -> void:
+	# A team's defences: one destructible nexus plus four towers — two ringing the nexus and
+	# two forward down the lanes.
+	var sim := SimCore.new()
+	sim.spawn_structures()
+	for team in MapData.NEXUS_POSITIONS.size():
+		var nexuses := 0
+		var towers := 0
+		for id in sim.state.entities:
+			var s: SimEntity = sim.state.entities[id]
+			if not s.is_structure or s.team != team:
+				continue
+			if s.is_nexus:
+				nexuses += 1
+			else:
+				towers += 1
+		assert_eq(nexuses, 1, "a team has exactly one nexus")
+		assert_eq(towers, 4, "a team fields four towers — two guarding the nexus, two forward")
 
 
 func _structure_at(state: SimState, team: int, position: Vector2) -> SimEntity:
@@ -316,8 +336,8 @@ func test_creep_waves_are_mirror_fair() -> void:
 		if not creep.is_creep or creep.team != 0:
 			continue
 		assert_not_null(
-			_creep_at(sim.state, 1, -creep.position),
-			"every team-0 creep has a team-1 creep mirrored through the origin",
+			_creep_at(sim.state, 1, MapData.mirror(creep.position)),
+			"every team-0 creep has a team-1 creep mirrored across the y = x axis",
 		)
 
 

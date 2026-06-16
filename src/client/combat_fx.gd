@@ -21,7 +21,7 @@ const NUMBER_COLOR := Color(1.0, 0.86, 0.4)
 ## Ranged auto: a small bright bolt that flies from attacker to target. Flight time scales
 ## with the gap but is clamped so a point-blank shot still reads and a long one is not slow.
 const BOLT_RADIUS := 13.0
-const BOLT_SPEED := 2000.0
+const BOLT_SPEED := 1300.0
 const BOLT_MIN_TIME := 0.05
 const BOLT_MAX_TIME := 0.22
 const BOLT_COLOR := Color(1.0, 0.9, 0.55)

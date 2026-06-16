@@ -36,6 +36,17 @@ unchanged. All were obtained through [Poly Pizza](https://poly.pizza).
 | Spider | Spider | Quaternius | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [poly.pizza](https://poly.pizza/m/yRYJiAJyiM) |
 | Chameleon | Lizard | madtrollstudio | [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) | [poly.pizza](https://poly.pizza/m/0z3NJc5zAE) |
 
+## Field models
+
+The lane creeps and the structures wear placeholder low-poly models too, handled the same
+way — rescaled to an on-field size and washed in their team colour, otherwise unchanged.
+
+| Prop | Model | Author | License | Source |
+| :--- | :--- | :--- | :--- | :--- |
+| Creep | Pink Slime | Quaternius | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [poly.pizza](https://poly.pizza/m/AyP8sQmDLh) |
+| Tower | Watch Tower | Quaternius | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [poly.pizza](https://poly.pizza/m/VJZZW37Vsk) |
+| Nexus | Crystal | iPoly3D | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) | [poly.pizza](https://poly.pizza/m/SbLlgMXrQ1) |
+
 ---
 
 [Next: Changelog →](CHANGELOG.md)

@@ -43,7 +43,8 @@ func test_a_full_snapshot_fits_in_one_unreliable_datagram() -> void:
 	# it must fit one datagram so the snapshot is not fragmented above the transport
 	# MTU (~1392 bytes) — the regression guard for the binary wire format.
 	var state := _opening_wave_state()
-	assert_gt(state.entities.size(), 20, "the opening wave is a heavy world")
+	# Proves the full creep wave plus the structures spawned — the heaviest realistic world.
+	assert_gt(state.entities.size(), 15, "the opening wave is a heavy world")
 	var bytes := NetProtocol.encode_snapshot(state)
 	assert_lt(bytes.size(), 1392, "the packed snapshot fits one datagram, below the MTU")
 

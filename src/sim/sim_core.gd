@@ -27,7 +27,7 @@ const CREEP_HP := 100
 const CREEP_DAMAGE := 20
 const CREEP_RANGE := 150.0
 const CREEP_COOLDOWN_TICKS := 30
-const CREEP_SPEED := 180.0
+const CREEP_SPEED := 210.0
 
 ## Wave cadence. Both teams spawn a wave per lane every interval, the first at
 ## tick 0. Creeps within a wave are strung along the lane so they file out of the
@@ -95,9 +95,9 @@ func add_structure(
 	return _register(entity)
 
 
-## Populates the arena's structures from the map: each team's lane towers plus
-## its destructible nexus. Both teams' structures mirror through the origin, so
-## the match starts mirror-fair.
+## Populates the arena's structures from the map — each team's four towers (two ringing the
+## nexus, two forward down the lanes) plus its destructible nexus. Both teams' structures mirror
+## across the map's y = x axis, so the match starts mirror-fair.
 func spawn_structures() -> void:
 	for team in MapData.NEXUS_POSITIONS.size():
 		for slot in MapData.tower_positions(team):
@@ -166,9 +166,9 @@ func add_creep(team: int, lane: int, position: Vector2) -> int:
 	return _register(entity)
 
 
-## Advances the world by exactly one tick: spawn waves, move the input-driven
-## units, march the creeps, resolve combat, then deaths. `inputs` maps an entity
-## id to its InputCommand; an entity with no command holds still. Pure: the
+## Advances the world by exactly one tick: spawn waves, revive the dead, move the
+## input-driven units, march the creeps, resolve combat, then deaths. `inputs` maps an
+## entity id to its InputCommand; an entity with no command holds still. Pure: the
 ## result is a function of the prior state and `inputs` only (creep waves spawn
 ## off `state.tick`). Once a nexus has fallen the match is over and step no-ops.
 func step(inputs: Dictionary) -> void:
@@ -233,7 +233,8 @@ func _step_spawning() -> void:
 
 ## Spawns `CREEP_PER_WAVE` creeps for `team` on `lane`, strung forward along the
 ## first lane segment so they file out of the base instead of stacking. Because
-## the lanes are point-symmetric, the two teams' waves mirror through the origin.
+## each lane is its own reflection across the y = x axis, the two teams' waves
+## mirror across that axis.
 func _spawn_wave(team: int, lane: int) -> void:
 	var path := MapData.lane_path(lane, team)
 	var origin := path[0]

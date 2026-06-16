@@ -26,6 +26,24 @@ protocol version.
 
 ### Changed
 
+- The arena is now a hand-designed map laid out on a single diagonal axis of symmetry rather
+  than the placeholder square diamond. The two lanes each bow out to one side of the map, a
+  river meanders across the middle, and the jungle holds two shared neutral camps on the axis
+  plus mirrored side camps. Each team defends four towers — two ringing its nexus and two
+  forward down the lanes — and the nexus itself. The whole map mirrors across the team-base
+  diagonal — one team's geometry is the other's reflected — so neither side has a positional
+  edge. The arena is sized to about 65% of a standard 5v5 map's side length — a tighter 3v3
+  footprint — and the movement speeds are tuned to match, so heroes and creeps move at a
+  comparable pace and a lane takes a standard-MOBA walk to cross rather than a sprint. The
+  simulation, the bots, and the netcode read the same geometry data, so the change is layout
+  and tuning only; the protocol is unchanged.
+- The lane creeps and the structures now wear placeholder 3D models — a slime for a creep,
+  a watchtower for a tower, a crystal for the nexus — in place of the debug capsules and
+  boxes, handled like the hero animals: each is auto-scaled to its on-field size, stood on
+  the ground, and washed in its team colour, with its floating bars tucked just above its
+  own measured top. So the whole field reads as models rather than the heroes standing among
+  debug primitives. Bundled asset licenses are credited in [`CREDITS.md`](CREDITS.md).
+  Presentation only — the simulation and the netcode protocol are unchanged.
 - The follow-camera now eases to the hero instead of locking to it 1:1, so a sharp turn or a
   respawn glides the view rather than snapping it; and while the hero is gone (dead, or not yet
   spawned) the camera rests where the hero last stood instead of jumping to the arena centre.
