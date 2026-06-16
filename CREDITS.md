@@ -9,6 +9,7 @@
 <p>
   <a href="README.md"><b>README</b></a> ·
   <a href="CHANGELOG.md"><b>Changelog</b></a> ·
+  <b>Credits</b> ·
   <a href="LICENSE"><b>License</b></a>
 </p>
 
@@ -49,4 +50,4 @@ way — rescaled to an on-field size and washed in their team colour, otherwise 
 
 ---
 
-[Next: Changelog →](CHANGELOG.md)
+[← Prev: Changelog](CHANGELOG.md) · [Next: License →](LICENSE)

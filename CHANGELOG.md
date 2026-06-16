@@ -9,6 +9,7 @@
 <p>
   <a href="README.md"><b>README</b></a> ·
   <b>Changelog</b> ·
+  <a href="CREDITS.md"><b>Credits</b></a> ·
   <a href="LICENSE"><b>License</b></a>
 </p>
 
@@ -289,4 +290,4 @@ protocol version.
 
 ---
 
-[← Prev: README](README.md)
+[← Prev: README](README.md) · [Next: Credits →](CREDITS.md)

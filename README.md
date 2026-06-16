@@ -17,6 +17,7 @@
 <p>
   <b>README</b> ·
   <a href="CHANGELOG.md"><b>Changelog</b></a> ·
+  <a href="CREDITS.md"><b>Credits</b></a> ·
   <a href="LICENSE"><b>License</b></a>
 </p>
 
