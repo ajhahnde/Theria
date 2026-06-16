@@ -25,6 +25,8 @@ protocol version.
 
 ## [Unreleased]
 
+## [v0.2.0] — 2026-06-16
+
 ### Added
 
 - An **in-client auto-updater**, so playtesters install Theria once and get new builds
