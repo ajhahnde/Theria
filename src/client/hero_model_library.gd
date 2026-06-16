@@ -41,6 +41,16 @@ const HERO_MODEL_SIZE := 260.0
 ## material's albedo into it and folds the team colour in.
 const CEL_SHADER: Shader = preload("res://src/client/cel.gdshader")
 
+## The soft drop-shadow blob laid under every unit so it sits on the ground rather than
+## floating: a flat quad washed by this radial-fade shader, sized to the unit's own footprint
+## and scaled out a touch, set a hair above the ground decor (SHADOW_Y) so a unit's shadow
+## reads over a lane or the river too. A blob, not a shadow-map cast — it grounds thin
+## low-poly legs cleanly without a stretched, noisy silhouette.
+const SHADOW_SHADER: Shader = preload("res://src/client/shadow.gdshader")
+const SHADOW_COLOR := Color(0.0, 0.0, 0.0, 0.5)
+const SHADOW_SCALE := 1.7
+const SHADOW_Y := 3.0
+
 ## How far a hero's albedo is mixed toward its team colour (0 keeps the species colour, 1
 ## replaces it), strong enough to read blue or red at a glance while the species texture
 ## still shows through. Kept light so an already-dark mesh (the spider) is tinted, not
@@ -168,6 +178,44 @@ static func add_prop(parent: Node3D, prop: String, team_tint: Color) -> Node3D:
 	_normalize(model, def["size"])
 	_stylize(model, team_tint, PROP_TINT_STRENGTH)
 	return model
+
+
+## Lays a soft drop-shadow blob under a unit, parented to its view `root`: a flat quad sized
+## to `body`'s measured footprint (scaled out by SHADOW_SCALE), washed by the radial-fade
+## shadow shader, set at SHADOW_Y above the ground. Grounds every unit — hero, creep, or
+## structure — against the grass. No-op for a footprint that measures to nothing. `body` must
+## already sit under `root` in the tree for its footprint to resolve.
+static func add_shadow(root: Node3D, body: Node3D) -> void:
+	var radius := footprint_radius(body)
+	if radius <= 0.0:
+		return
+	var blob := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	var diameter := radius * 2.0 * SHADOW_SCALE
+	quad.size = Vector2(diameter, diameter)
+	blob.mesh = quad
+	blob.rotation.x = -PI / 2.0  # lay the upright quad flat on the ground, facing up
+	blob.position = Vector3(0.0, SHADOW_Y, 0.0)
+	var mat := ShaderMaterial.new()
+	mat.shader = SHADOW_SHADER
+	mat.set_shader_parameter("shadow_color", SHADOW_COLOR)
+	blob.material_override = mat
+	root.add_child(blob)
+
+
+## The horizontal half-extent of `body` about its parent origin — the furthest its merged
+## mesh bounds reach on x or z, measured in the parent's space. Lets the presenter size a
+## unit's drop-shadow blob to its actual footprint, so a wide tower and a slim chameleon each
+## get a shadow that fits. `body` must be in the tree for its mesh transforms to resolve.
+static func footprint_radius(body: Node3D) -> float:
+	var parent := body.get_parent() as Node3D
+	var inv := parent.global_transform.affine_inverse() if parent else Transform3D()
+	var radius := 0.0
+	for mi in _meshes(body):
+		var box: AABB = inv * (mi.global_transform * mi.get_aabb())
+		radius = maxf(radius, maxf(absf(box.position.x), absf(box.end.x)))
+		radius = maxf(radius, maxf(absf(box.position.z), absf(box.end.z)))
+	return radius
 
 
 ## The height of `body`'s top above its parent origin — the merged mesh bounds' max y,

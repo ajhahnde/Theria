@@ -736,10 +736,11 @@ func _make_view(entity: SimEntity) -> Dictionary:
 	view["body"] = _build_body(root, entity)
 	if entity.is_hero and HeroModelLibrary.has_model(entity.kit_id):
 		HeroModelLibrary.setup_facing(view, entity.kit_id, view["body"])
+	HeroModelLibrary.add_shadow(root, view["body"])
 	if entity.is_hero:
 		var ring := MeshInstance3D.new()
 		ring.mesh = _ring_mesh()
-		ring.position = Vector3(0.0, 2.0, 0.0)
+		ring.position = Vector3(0.0, HeroModelLibrary.SHADOW_Y + 1.0, 0.0)  # over the shadow blob
 		ring.material_override = _flat_material(HUMAN_RING_COLOR)
 		root.add_child(ring)
 		view["ring"] = ring

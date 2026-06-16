@@ -20,6 +20,13 @@ uniform float use_vertex = 0.0;
 uniform vec4 team_tint : source_color = vec4(1.0);
 uniform float tint_strength : hint_range(0.0, 1.0) = 0.0;
 
+// A hard-edged fresnel rim that lights the model's silhouette, so a unit pops off the
+// jungle ground it stands on instead of blending into it. `rim_sharpness` is where the
+// rim starts toward the edge (higher = thinner band); `rim_amount` how bright it burns.
+uniform vec4 rim_color : source_color = vec4(1.0);
+uniform float rim_sharpness : hint_range(0.0, 1.0) = 0.45;
+uniform float rim_amount : hint_range(0.0, 2.0) = 0.8;
+
 // The two light levels the matte (shadowed) tone steps up through, giving three flat
 // bands in all. Eyeball-calibrated against the single key light and the ambient fill.
 const float MID_TONE = 0.5;
@@ -38,6 +45,9 @@ void fragment() {
 	ALBEDO = mix(base, team_tint.rgb, tint_strength);
 	ROUGHNESS = 1.0;
 	METALLIC = 0.0;
+	float fresnel = 1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0);
+	float rim = smoothstep(rim_sharpness, 1.0, fresnel);
+	EMISSION += rim_color.rgb * rim * rim_amount;
 }
 
 // Bands the key light into three flat tones with hard edges — the toon step. The
