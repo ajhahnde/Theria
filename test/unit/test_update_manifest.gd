@@ -78,11 +78,14 @@ func test_semver_compare_orders_and_pads() -> void:
 	assert_eq(UpdateManifest.semver_compare("v1.2.0", "1.2.0"), 0, "a leading v is ignored")
 
 
-func test_client_version_reads_the_canonical_file() -> void:
-	# The build ships res://VERSION ("v0.1.0" today); the leading v is stripped so it
-	# compares directly against a manifest min_client.
-	assert_false(UpdateManifest.client_version().is_empty(), "the bundled VERSION is readable")
-	assert_false(UpdateManifest.client_version().begins_with("v"), "the leading v is stripped")
+func test_client_version_reads_the_project_setting() -> void:
+	# The version comes from config/version (always baked into an export, unlike the loose
+	# res://VERSION file), with any leading v stripped so it compares against a min_client.
+	var version := UpdateManifest.client_version()
+	assert_false(version.is_empty(), "config/version is readable in the editor and any export")
+	assert_false(version.begins_with("v"), "a leading v is stripped")
+	var raw := str(ProjectSettings.get_setting(UpdateManifest.CLIENT_VERSION_SETTING, ""))
+	assert_eq(version, raw.lstrip("v"), "it reflects the project's config/version")
 
 
 func test_release_path_maps_each_channel() -> void:

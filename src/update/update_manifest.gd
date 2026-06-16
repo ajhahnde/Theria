@@ -34,9 +34,13 @@ const VERSION_PATH := PAYLOAD_DIR + "/.version"
 ## Touched after every successful reach to the channel; its mtime throttles the
 ## cold-start probe (see `Updater.should_check`).
 const LAST_CHECK_PATH := PAYLOAD_DIR + "/.last_check"
-## The client's own version, the seed it was built from. Mirrors the canonical
-## VERSION file; read to gate a pck whose `min_client` outruns this binary.
-const CLIENT_VERSION_PATH := "res://VERSION"
+## The project setting holding the client's own version — the in-engine mirror of the
+## canonical VERSION file (kept in lockstep by the drift gate), read to gate a pck whose
+## `min_client` outruns this binary. Read from ProjectSettings rather than the loose
+## `res://VERSION`: the bare VERSION file is not a resource, so `export_filter` drops it from
+## an exported launcher, where `config/version` is always present — so the export reads its
+## own version correctly instead of reading empty and refusing every update.
+const CLIENT_VERSION_SETTING := "application/config/version"
 
 ## The two update channels the player can pick between (persisted by `Settings`). Beta
 ## pulls the rolling `playtest` pre-release — a fresh pck per green push to main; Stable
@@ -149,16 +153,12 @@ static func local_sha() -> String:
 	return f.get_as_text().strip_edges()
 
 
-## This client's own version, read from the canonical VERSION file baked into the
+## This client's own version, read from the `config/version` project setting baked into the
 ## build, with a leading `v` stripped so it compares directly against a manifest's
-## `min_client`. Empty if the file is somehow absent (treated as the lowest version).
+## `min_client`. Always present in the editor and in any export (it is a core project
+## setting); empty only if somehow unset, which reads as the lowest version.
 static func client_version() -> String:
-	if not FileAccess.file_exists(CLIENT_VERSION_PATH):
-		return ""
-	var f := FileAccess.open(CLIENT_VERSION_PATH, FileAccess.READ)
-	if f == null:
-		return ""
-	return f.get_as_text().strip_edges().lstrip("v")
+	return str(ProjectSettings.get_setting(CLIENT_VERSION_SETTING, "")).strip_edges().lstrip("v")
 
 
 ## True when a runnable game payload is installed — the boot scene loads it over the
