@@ -1,0 +1,64 @@
+name: Release build
+
+# Builds the player-facing launcher binaries (Windows + macOS) and attaches them to the
+# GitHub Release for the tag. The launcher is the seed build: a full export with boot.tscn as
+# its main scene, so it runs offline out of the box and then self-updates by pulling game.pck
+# from the rolling `playtest` pre-release (published by ci.yml). Testers download a launcher
+# ONCE; new builds arrive as pck updates. Re-run this only when the launcher contract changes
+# (the engine line, the autoload/class set) and min_client is bumped — not every release.
+#
+# Unlike the pck export, full executable exports need the Godot export templates, so this job
+# downloads them. The macOS app is unsigned (codesign disabled in export_presets.cfg); testers
+# clear the Gatekeeper quarantine per the README. macOS exports fine from a Linux runner.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:  # allow a manual launcher build without cutting a new tag
+
+jobs:
+  launchers:
+    name: build launchers
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GODOT_VERSION: "4.6.3"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download Godot ${{ env.GODOT_VERSION }} + export templates
+        run: |
+          base="https://github.com/godotengine/godot-builds/releases/download"
+          ver="${GODOT_VERSION}-stable"
+          wget -q "${base}/${ver}/Godot_v${ver}_linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip
+          mv "Godot_v${ver}_linux.x86_64" godot
+          chmod +x godot
+          wget -q "${base}/${ver}/Godot_v${ver}_export_templates.tpz" -O templates.tpz
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -q templates.tpz
+          mv templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+      - name: Import project
+        run: ./godot --headless --import
+      - name: Export launchers
+        run: |
+          mkdir -p build
+          ./godot --headless --export-release "Windows Desktop" build/Theria.exe
+          ./godot --headless --export-release "macOS" build/Theria-macos.zip
+          test -s build/Theria.exe
+          test -s build/Theria-macos.zip
+          ls -la build
+      - name: Package the Windows launcher
+        run: |
+          # embed_pck is on, so Theria.exe is the whole launcher — zip it for a clean download.
+          cd build && zip -j Theria-windows.zip Theria.exe
+      - name: Attach launchers to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          # workflow_dispatch has no tag ref name; fall back to the latest release tag.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
+          fi
+          gh release upload "$tag" build/Theria-windows.zip build/Theria-macos.zip --clobber

@@ -38,3 +38,59 @@ jobs:
         run: ./godot --headless --import
       - name: Run tests
         run: ./godot --headless -s addons/gut/gut_cmdln.gd -gdir=res://test -ginclude_subdirs -gexit
+
+  publish-pck:
+    name: publish playtest pck
+    needs: [lint, test]
+    # Only after green lint+test, and only for a push to main — never on a PR. This is the
+    # rolling channel: every accepted commit re-publishes game.pck, and the in-client updater
+    # pulls it on the next launch. Exporting a pck needs only the Godot binary, no export
+    # templates (those are for the full launcher builds in release-build.yml).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GODOT_VERSION: "4.6.3"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download Godot ${{ env.GODOT_VERSION }} (headless)
+        run: |
+          base="https://github.com/godotengine/godot-builds/releases/download"
+          file="Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          wget -q "${base}/${GODOT_VERSION}-stable/${file}.zip" -O godot.zip
+          unzip -q godot.zip
+          mv "${file}" godot
+          chmod +x godot
+      - name: Import project
+        run: ./godot --headless --import
+      - name: Export game.pck
+        run: |
+          mkdir -p build
+          ./godot --headless --export-pack "Windows Desktop" build/game.pck
+          test -s build/game.pck  # fail loudly if the export produced nothing
+      - name: Write manifest.json
+        run: |
+          # min_client is the OLDEST launcher that can load this pck. Bump it ONLY when the
+          # launcher contract breaks (the engine line or the autoload/class set changes) — never
+          # per release — or testers would have to re-download the launcher on every build.
+          MIN_CLIENT="0.1.0"
+          VERSION="$(cat VERSION)"
+          cat > build/manifest.json <<EOF
+          {
+            "version": "${VERSION#v}",
+            "sha": "${GITHUB_SHA}",
+            "pck": "game.pck",
+            "min_client": "${MIN_CLIENT}"
+          }
+          EOF
+          cat build/manifest.json
+      - name: Publish to the rolling playtest pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view playtest >/dev/null 2>&1 || \
+            gh release create playtest --prerelease \
+              --title "Theria playtest (rolling)" \
+              --notes "Latest main build, auto-published. The in-client updater pulls game.pck from here on launch."
+          gh release upload playtest build/game.pck build/manifest.json --clobber

@@ -24,16 +24,13 @@ signal practice_requested(hero: String, difficulty: String)
 
 ## Menu styling. An opaque backdrop covers the whole viewport so the debug map and its
 ## jungle camps — drawn behind the menu in world space — do not bleed through the otherwise
-## transparent controls; the card sits on top as a framed panel, so the menu reads as UI
-## rather than floating text over the arena.
-const BACKDROP_COLOR := Color(0.07, 0.08, 0.10)
-const CARD_COLOR := Color(0.13, 0.14, 0.17)
-const CARD_PADDING := 52.0
-const CARD_CORNER := 14
+## transparent controls; the card sits on top as a framed panel drawn with the shared UiTheme,
+## so the menu reads as one product with the boot screen rather than as floating text over the
+## arena. The header is the Theria wordmark in place of a text title.
 const CARD_MIN_WIDTH := 680.0
-## The menu-wide base font size; every control inherits it, the title overrides larger.
-const BASE_FONT_SIZE := 28
-const TITLE_FONT_SIZE := 72
+const WORDMARK_WIDTH := 520.0
+const TITLE_FALLBACK_SIZE := 72
+const FOOTER_FONT_SIZE := 18
 const BUTTON_MIN_SIZE := Vector2(560, 76)
 const ADDRESS_MIN_WIDTH := 380.0
 
@@ -64,23 +61,23 @@ var _hero_picker: OptionButton
 ## Picks the bot skill level for a practice match; each item carries its level name as
 ## metadata, emitted on the Practice choice.
 var _difficulty_picker: OptionButton
+## The Settings dialog, built on first open — a placeholder panel until video/audio options
+## land, so the ⚙ Settings affordance exists without yet owning any settings.
+var _settings_dialog: AcceptDialog
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-
-	# A menu-wide theme bumps the base font so every control — the labels, the dropdown, the
-	# buttons, the address field — scales up together; the title overrides larger still.
-	var ui_theme := Theme.new()
-	ui_theme.default_font_size = BASE_FONT_SIZE
-	theme = ui_theme
+	# The shared theme styles every control — the wordmark header, the labels, the dropdowns,
+	# the buttons, the address field — so the menu reads as one product with the boot screen.
+	theme = UiTheme.make()
 
 	# An opaque backdrop, behind everything, so the world drawn in screen space behind the
 	# menu does not show through the transparent controls. Ignores the mouse so it never
 	# eats a click meant for a button below it in the tree.
 	var backdrop := ColorRect.new()
 	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	backdrop.color = BACKDROP_COLOR
+	backdrop.color = UiTheme.BG
 	backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(backdrop)
 
@@ -88,10 +85,10 @@ func _ready() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
-	# A framed card so the controls read against a solid panel rather than the arena. The
-	# stylebox is set explicitly so the look does not depend on the active editor theme.
+	# A framed card so the controls read against a solid panel rather than the arena, drawn
+	# with the shared card style so it matches the boot screen.
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", _card_style())
+	card.add_theme_stylebox_override("panel", UiTheme.card_style())
 	card.custom_minimum_size = Vector2(CARD_MIN_WIDTH, 0)
 	center.add_child(card)
 
@@ -99,11 +96,7 @@ func _ready() -> void:
 	box.add_theme_constant_override("separation", 18)
 	card.add_child(box)
 
-	var title := Label.new()
-	title.text = "Theria"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
-	box.add_child(title)
+	box.add_child(_header())
 
 	var pick_label := Label.new()
 	pick_label.text = "Practice hero"
@@ -147,15 +140,72 @@ func _ready() -> void:
 	join_button.pressed.connect(_on_join_pressed)
 	join_row.add_child(join_button)
 
+	box.add_child(_footer())
 
-## The card's background: a solid dark panel with rounded corners and inner padding, so the
-## controls sit on their own surface clear of the arena behind the menu.
-func _card_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = CARD_COLOR
-	style.set_corner_radius_all(CARD_CORNER)
-	style.set_content_margin_all(CARD_PADDING)
-	return style
+
+## The card header: the Theria wordmark texture, falling back to a large text title if the
+## asset is somehow missing, so the menu always names itself.
+func _header() -> Control:
+	var mark := UiTheme.wordmark()
+	if mark == null:
+		var title := Label.new()
+		title.text = "Theria"
+		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title.add_theme_font_size_override("font_size", TITLE_FALLBACK_SIZE)
+		return title
+	var logo := TextureRect.new()
+	logo.texture = mark
+	logo.custom_minimum_size = Vector2(WORDMARK_WIDTH, 0)
+	logo.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	logo.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	return logo
+
+
+## The card footer: a muted build line on the left (so a tester can report exactly which
+## build they are on) and the Settings affordance on the right, under a divider.
+func _footer() -> Control:
+	var wrap := VBoxContainer.new()
+	wrap.add_theme_constant_override("separation", 14)
+	wrap.add_child(HSeparator.new())
+	var row := HBoxContainer.new()
+	var build := Label.new()
+	build.text = _build_id()
+	build.add_theme_color_override("font_color", UiTheme.TEXT_MUTED)
+	build.add_theme_font_size_override("font_size", FOOTER_FONT_SIZE)
+	build.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	build.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(build)
+	var settings := Button.new()
+	settings.text = "⚙ Settings"
+	settings.pressed.connect(_open_settings)
+	row.add_child(settings)
+	wrap.add_child(row)
+	return wrap
+
+
+## The build line: the client version, the installed pck's short sha (or "seed" when running
+## the bundled build), and the boot screen's update outcome when it left one. The footer is
+## how a playtester names their build in a report, so it reads off the same sources the
+## updater wrote.
+func _build_id() -> String:
+	var sha := UpdateManifest.local_sha()
+	var build := sha.substr(0, 7) if not sha.is_empty() else "seed"
+	var parts := PackedStringArray(["v%s" % UpdateManifest.client_version(), "build %s" % build])
+	var status := str(Engine.get_meta(UiTheme.STATUS_META, ""))
+	if not status.is_empty():
+		parts.append(status)
+	return " · ".join(parts)
+
+
+## Opens the Settings dialog, building it on first use. A placeholder until video/audio
+## options land — the affordance is here so the menu has somewhere to grow them.
+func _open_settings() -> void:
+	if _settings_dialog == null:
+		_settings_dialog = AcceptDialog.new()
+		_settings_dialog.title = "Settings"
+		_settings_dialog.dialog_text = "Settings (video and audio) are coming soon."
+		add_child(_settings_dialog)
+	_settings_dialog.popup_centered()
 
 
 ## Fills the hero picker from the tribe rosters — one item per hero, labelled

@@ -44,6 +44,28 @@ rosters are on the field at once. The Verdani fight by attrition: their venom
 lingers as damage over time and their webs slow what they catch, a foil to the
 Solane's burst. Multi-hero teams over the wire and the art direction come next.
 
+## Playtesting
+
+Theria self-updates, so you install it once and always launch the latest build.
+
+1. Download the launcher for your platform from the
+   [latest release](https://github.com/ajhahnde/Theria/releases) — `Theria-windows.zip`
+   (Windows) or `Theria-macos.zip` (macOS).
+2. Unzip and run it. On launch it briefly checks for a newer build, downloads it if there is
+   one, and starts. Every build after that arrives automatically — you never re-download.
+
+It is offline-safe: with no connection it simply starts the build you already have, and an
+update never touches your settings or saved data.
+
+**macOS** builds are unsigned for now, so Gatekeeper blocks the first launch. Clear the
+quarantine flag once, then open the app normally:
+
+```sh
+xattr -dr com.apple.quarantine /path/to/Theria.app
+```
+
+Building Theria yourself instead of playtesting a release? See [Running](#running).
+
 ## Architecture
 
 The simulation is the single source of truth. `SimCore` is a deterministic,
@@ -76,7 +98,8 @@ delay adapts to the connection's measured jitter rather than being fixed.
 | `src/sim`    | The authoritative simulation core, its data types, and the data-driven hero ability layer. |
 | `src/bot`    | Bot input derived from the world state.               |
 | `src/net`    | Listen-server transport, the client/server wire protocol, remote-entity interpolation, and the playtest link-condition simulator. |
-| `src/client` | The connect menu, local input sampling, and rendering. |
+| `src/client` | The title screen, the boot/update screen, local input sampling, and rendering. |
+| `src/update` | The in-client auto-updater — manifest logic and the build download/swap. |
 | `test/unit`  | Headless tests of the simulation and the wire protocol. |
 | `scenes`     | Godot scenes.                                         |
 | `assets`     | Art assets — the placeholder hero models (see [`CREDITS.md`](CREDITS.md)). |
@@ -160,6 +183,13 @@ Both run in continuous integration on every push and pull request.
 
 Apache License 2.0 — see [`LICENSE`](LICENSE). Bundled third-party art assets carry
 their own licenses, credited in [`CREDITS.md`](CREDITS.md).
+
+## See also
+
+- [FlashOS](https://github.com/ajhahnde/FlashOS) — AArch64 bare-metal kernel for the Raspberry Pi 4B and QEMU.
+- [Flash](https://github.com/ajhahnde/Flash) — a systems language and Zig transpiler.
+- [the-way-out](https://github.com/ajhahnde/the-way-out) — top-down pixel-art escape-room shooter.
+- [eeco](https://github.com/ajhahnde/eeco) — self-maintaining workflow ecosystem.
 
 ---
 

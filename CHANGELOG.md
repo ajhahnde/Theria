@@ -25,6 +25,27 @@ protocol version.
 
 ## [Unreleased]
 
+### Added
+
+- An **in-client auto-updater**, so playtesters install Theria once and get new builds
+  automatically. The client now opens on a short update screen that checks for the latest
+  build and, when a newer one is published, downloads it and loads it over the bundled copy
+  before the match starts — no one re-downloads by hand to stay current. It is offline-safe:
+  with no connection, a failed download, or an unreachable server it simply starts the build
+  you already have, and it never touches your settings or saved data. Launches from the command
+  line (and headless runs) skip the check and go straight into the match.
+- A **title screen** in place of the bare connect menu: the Theria wordmark heads a consistent,
+  themed look shared with the update screen, and a footer shows your build id and update status
+  — so a bug report can name exactly which build you were on — alongside a Settings button
+  (video and audio options to come).
+
+### Changed
+
+- Builds are now published automatically. Every accepted change to `main` republishes the
+  downloadable game package the in-client updater pulls; a tagged release additionally produces
+  the downloadable Windows and macOS launchers. (macOS builds are unsigned for now — see the
+  README for the one-time Gatekeeper step.)
+
 ## [v0.1.0] — 2026-06-16
 
 ### Changed

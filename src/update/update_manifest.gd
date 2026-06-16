@@ -1,0 +1,156 @@
+class_name UpdateManifest
+extends RefCounted
+## The pure, network-free half of the auto-updater: parsing the published
+## `manifest.json`, deciding whether the remote build is newer than the installed
+## one, gating an install behind the client's own version, and naming every path
+## the updater touches. Split out from `Updater` so all the decision logic stays
+## unit-testable with no HTTP, no display, and no scene tree — `Updater` owns the
+## `HTTPRequest` and the file swaps and leans on this for the judgements.
+##
+## A published build is identified by its git commit `sha` (the rolling `main`
+## channel re-publishes a fresh `game.pck` per green push). The installed sha is
+## written to `.version` after a successful swap, so "is there an update" is a plain
+## string compare — exactly the model the-way-out's updater uses, adapted from a
+## branch tip to a per-build sha.
+##
+## Hard safety rule mirrored from that updater: every path here lives under
+## `PAYLOAD_DIR` (`user://payload/`). Player data (settings, future saves) lives at
+## the `user://` root, a *sibling* of the payload dir, so a pck swap can never reach
+## it. Nothing in the updater ever writes outside `PAYLOAD_DIR`.
+
+## The sandbox the updater owns. The live pck, the staged download, the kept-back
+## previous pck, and the installed-sha marker all live here; player data never does.
+const PAYLOAD_DIR := "user://payload"
+## The live game payload the boot scene loads over the bundled seed.
+const PCK_PATH := PAYLOAD_DIR + "/game.pck"
+## Where a download lands before it is promoted to the live pck — so a failed or
+## partial download never replaces a working install.
+const PCK_NEW_PATH := PAYLOAD_DIR + "/game.pck.new"
+## The previous live pck, kept after a successful swap for manual rollback.
+const PCK_PREV_PATH := PAYLOAD_DIR + "/game.pck.prev"
+## The git sha of the installed pck, written after a swap; empty/absent before the
+## first successful update (the client then runs its bundled seed).
+const VERSION_PATH := PAYLOAD_DIR + "/.version"
+## Touched after every successful reach to the channel; its mtime throttles the
+## cold-start probe (see `Updater.should_check`).
+const LAST_CHECK_PATH := PAYLOAD_DIR + "/.last_check"
+## The client's own version, the seed it was built from. Mirrors the canonical
+## VERSION file; read to gate a pck whose `min_client` outruns this binary.
+const CLIENT_VERSION_PATH := "res://VERSION"
+
+
+## Parses the published manifest JSON into a typed dictionary, tolerating anything
+## malformed: a parse failure or a non-object yields `ok = false` and empty fields,
+## so a corrupt or truncated manifest degrades to "no update" rather than a crash.
+## Returns `{ok, version, sha, pck, min_client}` with string fields defaulted empty.
+static func parse(json_text: String) -> Dictionary:
+	var blank := {"ok": false, "version": "", "sha": "", "pck": "", "min_client": ""}
+	# JSON.new().parse() returns the error code without pushing an engine error, unlike
+	# the static JSON.parse_string() — so a malformed manifest stays a quiet "no update".
+	var json := JSON.new()
+	if json.parse(json_text) != OK:
+		return blank
+	var data: Variant = json.data
+	if typeof(data) != TYPE_DICTIONARY:
+		return blank
+	return {
+		"ok": true,
+		"version": _string_field(data, "version"),
+		"sha": _string_field(data, "sha"),
+		"pck": _string_field(data, "pck"),
+		"min_client": _string_field(data, "min_client"),
+	}
+
+
+## Reads `key` from a parsed manifest as a trimmed string, defaulting empty when the
+## key is missing or not a string — so a number or null in the JSON never propagates.
+static func _string_field(data: Dictionary, key: String) -> String:
+	var value: Variant = data.get(key, "")
+	if typeof(value) != TYPE_STRING:
+		return ""
+	return (value as String).strip_edges()
+
+
+## True when `remote_sha` names a build we should install: it is non-empty and
+## differs from `local_sha`. An empty remote (manifest missing the sha, or offline)
+## is never an update; an empty local (nothing installed yet) makes any remote one.
+static func is_newer(remote_sha: String, local_sha: String) -> bool:
+	if remote_sha.is_empty():
+		return false
+	return remote_sha != local_sha
+
+
+## True when this client is new enough to run a pck declaring `min_client`. An empty
+## or unparseable `min_client` imposes no floor (true). The gate is the escape hatch
+## for a pck built against a changed engine/autoload set: bump `min_client` and old
+## launchers refuse the load and ask the player to re-download instead of crashing.
+static func client_supported(min_client: String, client_version: String) -> bool:
+	if min_client.strip_edges().is_empty():
+		return true
+	return semver_compare(client_version, min_client) >= 0
+
+
+## Compares two dotted version strings numerically, ignoring a leading `v` and any
+## non-numeric suffix on a part. Returns -1 / 0 / +1 for a < b / a == b / a > b.
+## Missing trailing parts read as zero, so "0.1" == "0.1.0".
+static func semver_compare(a: String, b: String) -> int:
+	var pa := _version_parts(a)
+	var pb := _version_parts(b)
+	var n: int = maxi(pa.size(), pb.size())
+	for i in n:
+		var ai: int = pa[i] if i < pa.size() else 0
+		var bi: int = pb[i] if i < pb.size() else 0
+		if ai != bi:
+			return -1 if ai < bi else 1
+	return 0
+
+
+## Splits a version string into integer parts, dropping a leading `v` and reading the
+## leading digits of each dotted segment (so "1.2.0-rc1" -> [1, 2, 0]).
+static func _version_parts(version: String) -> Array[int]:
+	var trimmed := version.strip_edges().lstrip("v")
+	var parts: Array[int] = []
+	for segment in trimmed.split("."):
+		parts.append(_leading_int(segment))
+	return parts
+
+
+## The integer value of the leading digit run of `segment`, or 0 if it starts with no
+## digit — so a tagged or suffixed segment compares on its numeric head alone.
+static func _leading_int(segment: String) -> int:
+	var digits := ""
+	for c in segment:
+		if c < "0" or c > "9":
+			break
+		digits += c
+	return digits.to_int() if not digits.is_empty() else 0
+
+
+## The git sha of the installed pck, read from `.version`, or empty when nothing has
+## been installed yet (the client is running its bundled seed). Best-effort: any read
+## failure reads as "nothing installed", which simply makes the next check offer an update.
+static func local_sha() -> String:
+	if not FileAccess.file_exists(VERSION_PATH):
+		return ""
+	var f := FileAccess.open(VERSION_PATH, FileAccess.READ)
+	if f == null:
+		return ""
+	return f.get_as_text().strip_edges()
+
+
+## This client's own version, read from the canonical VERSION file baked into the
+## build, with a leading `v` stripped so it compares directly against a manifest's
+## `min_client`. Empty if the file is somehow absent (treated as the lowest version).
+static func client_version() -> String:
+	if not FileAccess.file_exists(CLIENT_VERSION_PATH):
+		return ""
+	var f := FileAccess.open(CLIENT_VERSION_PATH, FileAccess.READ)
+	if f == null:
+		return ""
+	return f.get_as_text().strip_edges().lstrip("v")
+
+
+## True when a runnable game payload is installed — the boot scene loads it over the
+## bundled seed; absent, the client runs the seed it shipped with.
+static func has_payload() -> bool:
+	return FileAccess.file_exists(PCK_PATH)
