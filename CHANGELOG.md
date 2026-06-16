@@ -25,6 +25,16 @@ protocol version.
 
 ## [Unreleased]
 
+## [v0.3.1] — 2026-06-16
+
+### Fixed
+
+- Exported launchers could not self-update: every launch reported **"a new Theria is out —
+  please re-download the client"** and refused the update, because the build could not read
+  its own version number and so judged itself too old for any build. The version is now read
+  from a source that is always present in an exported build, so the client recognises its own
+  version and updates normally.
+
 ## [v0.3.0] — 2026-06-16
 
 ### Added
