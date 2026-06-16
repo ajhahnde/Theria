@@ -25,6 +25,22 @@ protocol version.
 
 ## [Unreleased]
 
+### Added
+
+- A **map-objects pass** dressing the arena into a jungle: a faceted **mountain wall** ringing the
+  edge (broken here and there by a tree), **scattered growth** across the open ground — palms as
+  the canopy, with ferns, bushes, grass tufts, mushrooms, and the odd boulder — thinning toward
+  the travelled lanes, low **ground swells** for relief, and each neutral camp dressed with a ring
+  of boulders around a carved totem and banner. The map centre is marked by a grand landmark tree
+  and a low ridge running the mirror axis, so the middle of the symmetric map reads at a glance.
+- All of the scattered decor is **mirrored across the map's symmetry axis**, so the two teams'
+  jungle halves are exact reflections and neither side has more cover.
+- A first pass of **jungle structure**: rock walls flank each lane and ring each camp, broken by
+  openings, so the jungle reads as distinct corridors rather than one open field. (The walls are
+  presentation for now — they do not yet block movement.)
+- The tall **canopy fades to its outline** over the player's hero as the camera passes through it,
+  so a unit under a palm stays visible. All of it is toon-shaded to match the field units.
+
 ## [v0.3.4] — 2026-06-16
 
 ### Added

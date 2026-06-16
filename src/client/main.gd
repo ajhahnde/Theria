@@ -197,6 +197,9 @@ var _cam_target: Vector2 = Vector2.ZERO
 ## the world origin), every one after eases toward the target by CAM_LERP.
 var _cam_ready: bool = false
 var _ground: MeshInstance3D = null
+## The shared map-decor material (JungleDecor); fed the hero's world position each frame so the
+## growth over the player's hero fades and the character stays visible.
+var _foliage_mat: ShaderMaterial = null
 var _views: Dictionary = {}
 ## The match's screen-space UI — the hero HUD, the kill feed, the chat box, and the death
 ## screen — built and driven as one layer by `MatchOverlays`, reconciled each tick in
@@ -633,6 +636,7 @@ func _build_world() -> void:
 	_ground.material_override = _ground_material()
 	add_child(_ground)
 	MapView.build(self)
+	_foliage_mat = JungleDecor.build(self)
 	_camera = Camera3D.new()
 	_camera.far = 20000.0
 	_camera.current = true
@@ -689,6 +693,9 @@ func _follow_camera(state: SimState) -> void:
 	if hero != null:
 		_cam_target = hero.position
 	_point_camera(_cam_target)
+	# Tell the map decor where the hero is, so any growth standing over it fades to its outline.
+	if _foliage_mat != null:
+		_foliage_mat.set_shader_parameter("hero_pos", _world(_cam_target))
 
 
 ## Eases the camera toward a pose above and behind a field point, looking down at it. The
