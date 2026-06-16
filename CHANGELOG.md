@@ -25,6 +25,22 @@ protocol version.
 
 ## [Unreleased]
 
+### Added
+
+- An **in-match HUD** for the player's hero: a bottom cluster with the hero's name
+  and active form, HP and resource bars, and the **QWER ability bar** — each cell
+  coloured by its effect, with a draining cooldown and its remaining seconds, and a
+  border that marks ready / blocked-on-resource. The built ability layer is now
+  legible and playable on screen.
+- A **kill feed** (top-right) announcing each hero takedown, and an **all/team chat
+  box** (bottom-left) — while typing in chat the ability casts are suppressed, so a
+  letter in a message never fires its bind. Chat is local-echo for now; delivery to
+  other players follows with the networking work. *(First pass: the kill feed names
+  the victim only — attributing the killer needs the simulation to record the lethal
+  blow.)*
+- A **settings button** (top-right) and a **death-recap** panel on the death screen,
+  both placeholders that reserve their spot in the layout for later slices.
+
 ## [v0.3.3] — 2026-06-16
 
 ### Changed

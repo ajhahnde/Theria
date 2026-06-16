@@ -17,6 +17,15 @@ const TITLE_FONT_SIZE := 96
 const TIMER_COLOR := Color(0.92, 0.93, 0.96)
 const TIMER_FONT_SIZE := 52
 
+## The death-recap card is a placeholder: a real recap names the killer and breaks the lethal
+## damage down by source, amount, and type, which needs the sim to attribute every hit to its
+## dealer (and a damage-type axis the combat layer does not carry yet) — its own slice. For now
+## the card reserves the spot on the death screen and states what it will hold.
+const RECAP_TITLE := "DEATH RECAP"
+const RECAP_PLACEHOLDER := "Killer and per-attacker damage and type will appear here."
+const RECAP_TITLE_FONT_SIZE := 24
+const RECAP_BODY_FONT_SIZE := 18
+
 var _timer_label: Label
 
 
@@ -55,7 +64,34 @@ func _ready() -> void:
 	_timer_label.add_theme_color_override("font_color", TIMER_COLOR)
 	box.add_child(_timer_label)
 
+	box.add_child(_build_recap())
+
 	hide()
+
+
+## The placeholder death-recap card: a framed panel on the shared palette naming what a full
+## recap will show (killer + per-source damage and type). Static for now — wired in so the slice
+## that records the lethal-damage breakdown only has to fill it, not find a place for it.
+func _build_recap() -> Control:
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", UiTheme.card_style())
+	var column := VBoxContainer.new()
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation", 10)
+	panel.add_child(column)
+	var heading := Label.new()
+	heading.text = RECAP_TITLE
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size", RECAP_TITLE_FONT_SIZE)
+	heading.add_theme_color_override("font_color", UiTheme.ACCENT)
+	column.add_child(heading)
+	var body := Label.new()
+	body.text = RECAP_PLACEHOLDER
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_theme_font_size_override("font_size", RECAP_BODY_FONT_SIZE)
+	body.add_theme_color_override("font_color", UiTheme.TEXT_MUTED)
+	column.add_child(body)
+	return panel
 
 
 ## Shows the death screen with the respawn countdown, or hides it when the hero is alive

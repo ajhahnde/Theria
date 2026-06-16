@@ -198,9 +198,10 @@ var _cam_target: Vector2 = Vector2.ZERO
 var _cam_ready: bool = false
 var _ground: MeshInstance3D = null
 var _views: Dictionary = {}
-## The death screen, on its own screen-space layer over the 3D world. Built once, hidden, and
-## shown by `_update_death_overlay` while the player's hero is down. Null on a headless run.
-var _death_overlay: DeathOverlay = null
+## The match's screen-space UI — the hero HUD, the kill feed, the chat box, and the death
+## screen — built and driven as one layer by `MatchOverlays`, reconciled each tick in
+## `_sync_world`. Null on a headless run (no display to draw it on).
+var _overlays: MatchOverlays = null
 
 
 func _ready() -> void:
@@ -641,13 +642,12 @@ func _build_world() -> void:
 	_player_input = PlayerInput.new(_camera)
 	_move_marker = MoveMarker.new()
 	add_child(_move_marker)
-	# The death screen rides its own CanvasLayer so it draws in screen space over the zoomed
-	# game camera, exactly like the connect menu. A headless smoke has no display to raise it on.
+	# The screen-space UI (HUD, kill feed, chat, death screen) draws over the zoomed game camera,
+	# exactly like the connect menu. MatchOverlays owns its canvas layers; a headless smoke has no
+	# display to raise it on, so it is built only with one.
 	if not _is_headless():
-		_death_overlay = DeathOverlay.new()
-		var death_layer := CanvasLayer.new()
-		death_layer.add_child(_death_overlay)
-		add_child(death_layer)
+		_overlays = MatchOverlays.new()
+		add_child(_overlays)
 
 
 ## Reconciles the view pool against the live state, then trails the camera. Called each
@@ -677,7 +677,7 @@ func _sync_world() -> void:
 	else:
 		_move_marker.clear()
 	_follow_camera(state)
-	_update_death_overlay(state)
+	_update_overlays(state)
 
 
 ## Trails the camera on the player's hero — a fixed height and pitch, eased toward it each
@@ -712,16 +712,22 @@ func _camera_focus(state: SimState) -> SimEntity:
 	return null
 
 
-## Raises or hides the death screen for the player's own hero. While the hero is down its
-## respawn timer drives the on-screen countdown; alive — or not yet spawned — the screen stays
-## hidden. The hero is the camera's focus, sim-driven in LOCAL/HOST and read out of the snapshot
-## on a CLIENT, so the countdown ticks down straight off the same entity the world draws.
-func _update_death_overlay(state: SimState) -> void:
-	if _death_overlay == null:
+## Reconciles the whole screen-space UI each tick: the HUD, kill feed, and death screen all
+## read off the player's focus hero (the camera's hero — sim-driven in LOCAL/HOST, read out of
+## the snapshot on a CLIENT), so every overlay shows exactly what the player is driving. The
+## kill feed also takes the two team colours for its lines.
+func _update_overlays(state: SimState) -> void:
+	if _overlays == null:
 		return
-	var hero := _camera_focus(state)
-	var ticks := hero.respawn_ticks if hero != null else 0
-	_death_overlay.set_respawn(ticks, SimCore.TICK_RATE)
+	_overlays.update(
+		_camera_focus(state), state, _player_team(), [HERO_COLOR, BOT_COLOR], SimCore.TICK_RATE
+	)
+
+
+## Whether the player is typing in chat — the driver suppresses ability casts while they are, so
+## the letters of a message never fire the QWER bar. Movement (a mouse click) is left alone.
+func _chat_typing() -> bool:
+	return _overlays != null and _overlays.is_chat_typing()
 
 
 ## Builds an entity's pooled view: a primitive body (capsule unit, box structure), a
@@ -943,10 +949,12 @@ func _hero_color(entity: SimEntity) -> Color:
 
 
 ## This tick's player command — delegated to PlayerInput, handed the world the player acts on,
-## their hero, their team, and whether to sample casts (only with a local authoritative sim).
+## their hero, their team, and whether to sample casts. Casts are sampled only with a local
+## authoritative sim and while the player is not typing in chat, so a letter in a message never
+## fires its QWER bind.
 func _sample_player_input() -> InputCommand:
 	return _player_input.sample(
-		_visible_state(), _player_hero_entity(), _player_team(), _sim != null
+		_visible_state(), _player_hero_entity(), _player_team(), _sim != null and not _chat_typing()
 	)
 
 
