@@ -21,7 +21,7 @@ extends RefCounted
 ## connect and a mismatch is refused, so an old client cannot desync against a
 ## newer server. Bump it on any wire-shape change here.
 
-const PROTOCOL_VERSION := 3
+const PROTOCOL_VERSION := 4
 
 ## Bit positions for the packed entity-flags field (slot 11 of an entity row).
 const _FLAG_STRUCTURE := 1
@@ -92,10 +92,12 @@ static func decode_snapshot(bytes: PackedByteArray) -> SimState:
 	return state
 
 
-## Fixed entity byte record, by field (little-endian, 35 bytes):
+## Fixed entity byte record, by field (little-endian, 37 bytes):
 ##   id u32  team u8  pos.x f32  pos.y f32  move_speed f32  hp i16  max_hp i16
 ##   attack_damage i16  attack_range f32  attack_cooldown_ticks u16  cooldown u16
 ##   flags u8 (structure|nexus|creep bitmask)  lane u8  waypoint_index u16
+##   respawn_ticks u16 (0 for a living unit; a downed hero's countdown, so the client raises
+##   its death screen and ticks the timer straight off the snapshot)
 ## Floats are narrowed to 32 bits: positions are Vector2 (already 32-bit) so they round
 ## trip exactly, and the round-number tunings are exact in 32 bits too. The integer
 ## widths cover the v0.1 tuning with headroom (hp and damage sit well inside a signed
@@ -123,6 +125,7 @@ static func _encode_entity(buf: StreamPeerBuffer, entity: SimEntity) -> void:
 	buf.put_u8(flags)
 	buf.put_u8(entity.lane)
 	buf.put_u16(entity.waypoint_index)
+	buf.put_u16(entity.respawn_ticks)
 
 
 static func _decode_entity(buf: StreamPeerBuffer) -> SimEntity:
@@ -143,4 +146,5 @@ static func _decode_entity(buf: StreamPeerBuffer) -> SimEntity:
 	entity.is_creep = (flags & _FLAG_CREEP) != 0
 	entity.lane = buf.get_u8()
 	entity.waypoint_index = buf.get_u16()
+	entity.respawn_ticks = buf.get_u16()
 	return entity

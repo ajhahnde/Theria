@@ -9,7 +9,7 @@ extends GutTest
 func test_protocol_version_is_pinned() -> void:
 	# The netcode compatibility axis. A wire-shape change must bump this in the
 	# same commit; this guard makes an accidental drift fail the suite.
-	assert_eq(NetProtocol.PROTOCOL_VERSION, 3)
+	assert_eq(NetProtocol.PROTOCOL_VERSION, 4)
 
 
 func test_input_round_trips_with_its_sequence_number() -> void:
@@ -75,6 +75,26 @@ func test_a_populated_snapshot_round_trips_every_field() -> void:
 		assert_eq(copy.is_creep, original.is_creep)
 		assert_eq(copy.lane, original.lane)
 		assert_eq(copy.waypoint_index, original.waypoint_index)
+		assert_eq(copy.respawn_ticks, original.respawn_ticks)
+
+
+func test_snapshot_carries_a_downed_heros_respawn_timer() -> void:
+	# The respawn countdown rides the snapshot so a pure CLIENT can raise its own death screen
+	# and tick the timer down without simulating. Kill team 0's hero outright, let the death pass
+	# down it, then prove the timer survives the trip.
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var hero := sim.add_hero(0, MapData.spawn_for_team(0), 320.0)
+	sim.state.get_entity(hero).hp = 0
+	sim.step({})  # the death pass downs the hero and starts its respawn clock
+	var original := sim.state.get_entity(hero)
+	assert_true(original.is_dead(), "the slain hero is downed, not erased")
+	var restored := NetProtocol.decode_snapshot(NetProtocol.encode_snapshot(sim.state))
+	assert_eq(
+		restored.get_entity(hero).respawn_ticks,
+		original.respawn_ticks,
+		"the respawn countdown survives the trip so the client can show it",
+	)
 
 
 func test_snapshot_preserves_entity_order() -> void:

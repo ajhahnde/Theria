@@ -128,6 +128,7 @@ static func _targets(
 			if (
 				t != null
 				and t.max_hp > 0
+				and not t.is_dead()
 				and t.team != caster.team
 				and caster.position.distance_to(t.position) <= spec.range
 			):
@@ -162,7 +163,7 @@ static func pick_unit_target(state: SimState, caster_team: int, point: Vector2) 
 	var best_dist := INF
 	for id in state.entities:
 		var e: SimEntity = state.entities[id]
-		if e.team == caster_team or e.max_hp <= 0:
+		if e.team == caster_team or e.max_hp <= 0 or e.is_dead():
 			continue
 		var d := point.distance_to(e.position)
 		if d < best_dist:
@@ -179,7 +180,7 @@ static func _enemies_in_area(
 	var hits: Array[SimEntity] = []
 	for id in state.entities:
 		var e: SimEntity = state.entities[id]
-		if e.team == caster.team or e.max_hp <= 0:
+		if e.team == caster.team or e.max_hp <= 0 or e.is_dead():
 			continue
 		if center.distance_to(e.position) <= radius:
 			hits.append(e)

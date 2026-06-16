@@ -42,6 +42,11 @@ func _init(camera: Camera3D) -> void:
 ## movement alone.
 func sample(state: SimState, hero: SimEntity, team: int, cast_abilities: bool) -> InputCommand:
 	var command := InputCommand.new()
+	if hero != null and hero.is_dead():
+		# Down and behind the death screen: ignore input and drop any standing order, so the
+		# hero respawns idle at base rather than marching off toward a pre-death click.
+		_halt()
+		return command
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		_issue_order(state, team, _mouse_world_point())
 	if Input.is_physical_key_pressed(STOP_KEY):

@@ -48,6 +48,12 @@ const HERO_DAMAGE := 60
 const HERO_RANGE := 250.0
 const HERO_COOLDOWN_TICKS := 36
 
+## How long a slain hero stays down before respawning at its spawn point, full health. A flat
+## timer for now (8 s at the tick rate) — short enough that a death is a setback, not a sit-out;
+## scaling it with match time is a later tuning pass. A dead hero is kept in the world (not
+## erased like a creep) so its id, and this countdown, persist for the client's death screen.
+const HERO_RESPAWN_TICKS := 8 * TICK_RATE
+
 var state: SimState = SimState.new()
 
 ## Whether `step` spawns creep waves on its own clock. On for live play and the
@@ -104,8 +110,10 @@ func spawn_structures() -> void:
 ## returns its id. `move_speed` is set by the driver; combat is fixed tuning.
 func add_hero(team: int, position: Vector2, move_speed: float) -> int:
 	var entity := SimEntity.new(_next_id, team, position, move_speed)
+	entity.is_hero = true  # a hero from birth, so death downs-and-respawns it even before a kit
 	entity.max_hp = HERO_HP
 	entity.hp = HERO_HP
+	entity.spawn_position = position  # where it returns after a death
 	entity.attack_damage = HERO_DAMAGE
 	entity.attack_range = HERO_RANGE
 	entity.attack_cooldown_ticks = HERO_COOLDOWN_TICKS
@@ -170,6 +178,7 @@ func step(inputs: Dictionary) -> void:
 	if state.is_match_over():
 		return
 	_step_spawning()
+	_step_respawns()
 	_step_movement(inputs)
 	_step_creeps()
 	_step_statuses()
@@ -199,6 +208,8 @@ func _step_movement(inputs: Dictionary) -> void:
 ## server and a predicting client move a unit by byte-identical math, which is what
 ## lets client-side reconciliation land exactly on the authoritative position.
 static func apply_movement(entity: SimEntity, command: InputCommand) -> void:
+	if entity.is_dead():
+		return  # a downed hero holds where it fell — server and the client's prediction alike
 	var move_dir := Vector2.ZERO
 	if command != null:
 		move_dir = command.move_dir
@@ -303,8 +314,8 @@ func _step_statuses() -> void:
 func _step_abilities(inputs: Dictionary) -> void:
 	for id in state.entities:
 		var hero: SimEntity = state.entities[id]
-		if not hero.is_hero:
-			continue
+		if not hero.is_hero or hero.is_dead():
+			continue  # a dead hero neither regens nor decays cooldowns until it respawns
 		_regen_resource(hero)
 		_tick_cooldowns(hero)
 	for id in inputs:
@@ -312,7 +323,7 @@ func _step_abilities(inputs: Dictionary) -> void:
 		if command == null or command.ability_slot < 0:
 			continue
 		var hero: SimEntity = state.get_entity(id)
-		if hero != null and hero.is_hero:
+		if hero != null and hero.is_hero and not hero.is_dead():
 			_try_cast(hero, command)
 
 
@@ -358,6 +369,8 @@ func _step_combat() -> void:
 		var attacker: SimEntity = state.entities[id]
 		if attacker.attack_damage <= 0:
 			continue
+		if attacker.is_dead():
+			continue  # a downed hero stops fighting until it respawns
 		if attacker.is_stunned():
 			continue  # a locked unit neither strikes nor ticks its cooldown down
 		if attacker.cooldown > 0:
@@ -400,8 +413,8 @@ func _nearest_enemy_in_range(attacker: SimEntity) -> SimEntity:
 		var other: SimEntity = state.entities[id]
 		if other.team == attacker.team:
 			continue
-		if other.max_hp <= 0:
-			continue
+		if other.max_hp <= 0 or other.is_dead():
+			continue  # non-combat entities and downed heroes are not valid targets
 		var dist := attacker.position.distance_to(other.position)
 		if dist <= attacker.attack_range and dist < nearest_dist:
 			nearest_dist = dist
@@ -409,14 +422,64 @@ func _nearest_enemy_in_range(attacker: SimEntity) -> SimEntity:
 	return nearest
 
 
+## Reconciles every unit brought to 0 hp this tick. A creep or a structure is erased (a
+## felled nexus first deciding the match); a hero is kept in the world but downed —
+## marked dead and put on the respawn clock — so its id, position, and countdown persist
+## for the client's death screen and `_step_respawns` can revive it in place. A hero
+## already counting down is skipped, so it is downed once, not re-killed every tick.
 func _resolve_deaths() -> void:
 	var dead: Array[int] = []
 	for id in state.entities:
 		var entity: SimEntity = state.entities[id]
-		if entity.max_hp > 0 and entity.hp <= 0:
+		if entity.max_hp > 0 and entity.hp <= 0 and not entity.is_dead():
 			dead.append(id)
 	for id in dead:
 		var entity: SimEntity = state.entities[id]
+		if entity.is_hero:
+			_down_hero(entity)
+			continue
 		if entity.is_nexus and not state.is_match_over():
 			state.winner = 1 - entity.team
 		state.entities.erase(id)
+
+
+## Puts a slain hero on the respawn clock instead of erasing it: hp pinned to 0, the
+## respawn timer started, and any lingering statuses and auto-attack cooldown cleared so
+## nothing carries over the death. `is_dead` now reads true, which makes every acting and
+## targeting step skip it until `_step_respawns` revives it.
+func _down_hero(hero: SimEntity) -> void:
+	hero.hp = 0
+	hero.respawn_ticks = HERO_RESPAWN_TICKS
+	hero.statuses.clear()
+	hero.cooldown = 0
+
+
+## Counts every downed hero's respawn timer down by one tick and revives the hero the tick
+## it elapses. Runs near the top of the step so a hero that comes back this tick is alive for
+## the rest of it. Pure and insertion-ordered like every other step.
+func _step_respawns() -> void:
+	for id in state.entities:
+		var hero: SimEntity = state.entities[id]
+		if not hero.is_dead():
+			continue
+		hero.respawn_ticks -= 1
+		if hero.respawn_ticks <= 0:
+			_respawn_hero(hero)
+
+
+## Revives a hero at its spawn point with a full health bar, back in human form with a full
+## resource pool and every cooldown cleared — a clean slate, as if freshly seated. `respawn_ticks`
+## lands at 0, so `is_dead` reads false and the hero acts again from this tick. A hero with no kit
+## (the bare walking skeleton) has empty resource tuning, so the pool simply stays 0.
+func _respawn_hero(hero: SimEntity) -> void:
+	hero.respawn_ticks = 0
+	hero.position = hero.spawn_position
+	hero.hp = hero.max_hp
+	hero.cooldown = 0
+	hero.statuses.clear()
+	hero.ability_cooldowns.clear()
+	hero.form = AbilitySpec.FORM_HUMAN
+	hero.resource_max = hero.form_resource_max[AbilitySpec.FORM_HUMAN]
+	hero.resource_regen_ticks = hero.form_resource_regen[AbilitySpec.FORM_HUMAN]
+	hero.resource = hero.resource_max
+	hero.resource_regen_counter = 0

@@ -232,7 +232,7 @@ func test_an_unequipped_hero_ignores_ability_intent() -> void:
 	cast.ability_slot = 0
 	cast.target_point = Vector2(100.0, 0.0)
 	sim.step({id: cast})  # must not cast or crash
-	assert_false(sim.state.get_entity(id).is_hero, "a bare hero is not an ability caster")
+	assert_true(sim.state.get_entity(id).kit.is_empty(), "a bare hero carries no kit to cast from")
 	assert_eq(sim.state.get_entity(enemy).hp, 600, "and its ability intent does nothing")
 
 

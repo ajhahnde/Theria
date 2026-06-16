@@ -195,6 +195,9 @@ var _cam_target: Vector2 = Vector2.ZERO
 var _cam_ready: bool = false
 var _ground: MeshInstance3D = null
 var _views: Dictionary = {}
+## The death screen, on its own screen-space layer over the 3D world. Built once, hidden, and
+## shown by `_update_death_overlay` while the player's hero is down. Null on a headless run.
+var _death_overlay: DeathOverlay = null
 
 
 func _ready() -> void:
@@ -634,6 +637,13 @@ func _build_world() -> void:
 	_player_input = PlayerInput.new(_camera)
 	_move_marker = MoveMarker.new()
 	add_child(_move_marker)
+	# The death screen rides its own CanvasLayer so it draws in screen space over the zoomed
+	# game camera, exactly like the connect menu. A headless smoke has no display to raise it on.
+	if not _is_headless():
+		_death_overlay = DeathOverlay.new()
+		var death_layer := CanvasLayer.new()
+		death_layer.add_child(_death_overlay)
+		add_child(death_layer)
 
 
 ## Reconciles the view pool against the live state, then trails the camera. Called each
@@ -663,6 +673,7 @@ func _sync_world() -> void:
 	else:
 		_move_marker.clear()
 	_follow_camera(state)
+	_update_death_overlay(state)
 
 
 ## Trails the camera on the player's hero — a fixed height and pitch, eased toward it each
@@ -695,6 +706,18 @@ func _camera_focus(state: SimState) -> SimEntity:
 	if state.entities.has(_hero_id):
 		return state.entities[_hero_id]
 	return null
+
+
+## Raises or hides the death screen for the player's own hero. While the hero is down its
+## respawn timer drives the on-screen countdown; alive — or not yet spawned — the screen stays
+## hidden. The hero is the camera's focus, sim-driven in LOCAL/HOST and read out of the snapshot
+## on a CLIENT, so the countdown ticks down straight off the same entity the world draws.
+func _update_death_overlay(state: SimState) -> void:
+	if _death_overlay == null:
+		return
+	var hero := _camera_focus(state)
+	var ticks := hero.respawn_ticks if hero != null else 0
+	_death_overlay.set_respawn(ticks, SimCore.TICK_RATE)
 
 
 ## Builds an entity's pooled view: a primitive body (capsule unit, box structure), a
@@ -768,6 +791,7 @@ func _update_view(view: Dictionary, entity: SimEntity) -> void:
 	var root := view["root"] as Node3D
 	var moved := _world(entity.position) - root.position
 	root.position = _world(entity.position)
+	root.visible = not entity.is_dead()  # a downed hero's body vanishes behind the death screen
 	if view.has("yaw"):
 		HeroModelLibrary.drive_facing(view, view["body"], Vector2(moved.x, moved.z))
 	if view.has("ring"):

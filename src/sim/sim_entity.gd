@@ -44,6 +44,17 @@ var waypoint_index: int = 0
 ## (see SimCore.equip_kit); a hero with no kit just auto-attacks like before.
 var is_hero: bool = false
 
+## Where this hero respawns after dying — its spawn point, set once at creation. Sim-only
+## (never serialized): respawn is resolved server-side, so a client never needs it.
+var spawn_position: Vector2 = Vector2.ZERO
+
+## Ticks until this hero respawns, counted down each tick. 0 for a living unit; set to
+## SimCore.HERO_RESPAWN_TICKS the tick the hero dies, the hero blinking back at full HP when it
+## reaches 0. Only a hero ever carries it — creeps and structures are erased on death, a hero is
+## kept and revived — so `is_dead` reads it as the dead/alive flag. Serialized so a client can
+## raise its own death screen and tick down the respawn countdown from its hero's snapshot.
+var respawn_ticks: int = 0
+
 ## The active shapeshifter form (AbilitySpec.FORM_HUMAN / FORM_ANIMAL). Only the
 ## abilities of the active form are castable; a TRANSFORM ability flips it.
 var form: int = 0
@@ -123,6 +134,8 @@ func clone() -> SimEntity:
 	copy.lane = lane
 	copy.waypoint_index = waypoint_index
 	copy.is_hero = is_hero
+	copy.spawn_position = spawn_position
+	copy.respawn_ticks = respawn_ticks
 	copy.form = form
 	copy.stance = stance
 	copy.kit_id = kit_id
@@ -136,6 +149,14 @@ func clone() -> SimEntity:
 	copy.kit = kit.duplicate(true)
 	copy.statuses = statuses.duplicate(true)
 	return copy
+
+
+## Whether this hero is dead and counting down to respawn. A dead hero is inert — it cannot
+## move, attack, cast, or be targeted (every acting and targeting step skips it) — and the
+## client hides its body behind the death screen until the timer elapses. Reads off
+## `respawn_ticks` so death and its countdown are one piece of state, alive again at 0.
+func is_dead() -> bool:
+	return respawn_ticks > 0
 
 
 ## This entity's move speed after any active lock or slow. A STUN freezes it outright

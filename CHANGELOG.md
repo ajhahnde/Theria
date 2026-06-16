@@ -68,6 +68,14 @@ protocol version.
 
 ### Added
 
+- Heroes now respawn instead of dying for good. A slain hero is no longer erased — it falls,
+  goes inert (it cannot move, fight, cast, or be targeted), and a respawn clock counts it back,
+  returning it at full health at its spawn point a few seconds later; only creeps and structures
+  stay dead. While the player's own hero is down a death screen dims the match and shows the
+  respawn countdown, and any standing move order is dropped so the hero comes back idle at base
+  rather than walking off toward a pre-death click. The respawn timer rides the snapshot, so a
+  networked client raises its own death screen straight from the wire — the netcode protocol
+  version moves to **4** for the added field.
 - Press **S** to stop the hero where it stands, clearing the current move or attack order (the
   MOBA-standard hold-position): tap it to cancel a path, hold it to stay planted while a fresh
   right-click is held. Client-side input only; the simulation and the netcode protocol are

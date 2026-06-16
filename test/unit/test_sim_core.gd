@@ -108,6 +108,64 @@ func test_an_entity_dies_when_its_hp_reaches_zero() -> void:
 	assert_null(sim.state.get_entity(enemy), "an entity at 0 hp is removed from the world")
 
 
+# --- Hero death & respawn ---------------------------------------------------
+
+
+func test_a_slain_hero_is_downed_not_erased() -> void:
+	# Unlike a creep, a dead hero is kept in the world and put on the respawn clock, so its id and
+	# countdown persist for the client's death screen and the revive step.
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var hero := sim.add_hero(0, MapData.spawn_for_team(0), 320.0)
+	sim.state.get_entity(hero).hp = 0
+	sim.step({})
+	var downed := sim.state.get_entity(hero)
+	assert_not_null(downed, "a slain hero stays in the world rather than being erased")
+	assert_true(downed.is_dead(), "the slain hero is marked dead")
+	assert_eq(downed.respawn_ticks, SimCore.HERO_RESPAWN_TICKS, "its respawn clock is started")
+	assert_eq(downed.hp, 0, "a downed hero sits at 0 hp")
+
+
+func test_a_downed_hero_respawns_full_at_its_spawn_point() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var spawn := MapData.spawn_for_team(0)
+	var hero := sim.add_hero(0, spawn, 320.0)
+	# Walk the hero off its spawn so the respawn-in-place is observable, then kill it.
+	sim.state.get_entity(hero).position = spawn + Vector2(500.0, 0.0)
+	sim.state.get_entity(hero).hp = 0
+	sim.step({})  # downs the hero, starting the HERO_RESPAWN_TICKS countdown
+	for _i in SimCore.HERO_RESPAWN_TICKS - 1:
+		sim.step({})
+		assert_true(sim.state.get_entity(hero).is_dead(), "the hero stays down until the timer elapses")
+	sim.step({})  # the tick the timer reaches 0
+	var revived := sim.state.get_entity(hero)
+	assert_false(revived.is_dead(), "the hero is alive once the timer elapses")
+	assert_eq(revived.hp, SimCore.HERO_HP, "it returns at full health")
+	assert_eq(revived.position, spawn, "it returns at its spawn point")
+
+
+func test_a_downed_hero_is_inert_and_untargetable() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var tower := sim.add_structure(1, Vector2.ZERO, 1000, 100, 300.0, 60)
+	var hero := sim.add_hero(0, Vector2(100.0, 0.0), 320.0)
+	sim.state.get_entity(hero).hp = 0
+	sim.step({})  # downs the hero
+	assert_true(sim.state.get_entity(hero).is_dead())
+	var down_pos := sim.state.get_entity(hero).position
+	# Untargetable: the only enemy in the tower's range is the corpse, so it finds nothing to hit.
+	assert_null(
+		sim._nearest_enemy_in_range(sim.state.get_entity(tower)),
+		"a downed hero is not a valid attack target",
+	)
+	# Inert: a move command on a downed hero is ignored — it holds where it fell.
+	var command := InputCommand.new()
+	command.move_dir = Vector2.RIGHT
+	sim.step({hero: command})
+	assert_eq(sim.state.get_entity(hero).position, down_pos, "a downed hero does not move")
+
+
 func test_nexus_destruction_sets_the_winner_and_freezes_the_match() -> void:
 	var sim := SimCore.new()
 	sim.spawn_creeps = false
