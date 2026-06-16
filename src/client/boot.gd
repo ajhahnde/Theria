@@ -113,7 +113,11 @@ func _finish(status: String, message: String) -> void:
 ## runs the seed it shipped with. A failed pack load is non-fatal for the same reason — the
 ## bundled scene is still there to fall back to.
 func _hand_off() -> void:
-	if UpdateManifest.has_payload():
+	# Only an exported player build runs the installed payload. An editor/source run (F5, or
+	# `godot --path .`, including the `--local`/`--host`/`--join` dev launches) must play its own
+	# `res://` source, never the last-downloaded pck — otherwise it silently shadows uncommitted
+	# changes with the shipped build, which is exactly the trap that hid the HUD during playtests.
+	if UpdateManifest.should_load_payload(OS.has_feature("editor"), UpdateManifest.has_payload()):
 		ProjectSettings.load_resource_pack(UpdateManifest.PCK_PATH)
 	# Deferred: a skip-path hand-off runs inside `_ready`, when the tree is mid-add and a
 	# synchronous scene change is refused; deferring runs it on the next idle frame instead.

@@ -113,6 +113,24 @@ func test_release_path_falls_back_to_beta_for_an_unknown_channel() -> void:
 	)
 
 
+func test_should_load_payload_only_in_an_exported_build() -> void:
+	# An editor/source run must play its own res:// source even with a payload present, or the
+	# last-downloaded shipped pck shadows uncommitted changes (the HUD-not-rendering trap). Only a
+	# non-editor (exported) build with a payload installed loads it.
+	assert_true(
+		UpdateManifest.should_load_payload(false, true),
+		"an exported build with a payload installed loads it"
+	)
+	assert_false(
+		UpdateManifest.should_load_payload(true, true),
+		"an editor/source run ignores the payload and plays its own source"
+	)
+	assert_false(
+		UpdateManifest.should_load_payload(false, false),
+		"no payload, nothing to load"
+	)
+
+
 func test_normalize_channel_coerces_to_a_known_id() -> void:
 	assert_eq(UpdateManifest.normalize_channel("stable"), UpdateManifest.CHANNEL_STABLE)
 	assert_eq(UpdateManifest.normalize_channel("beta"), UpdateManifest.CHANNEL_BETA)

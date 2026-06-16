@@ -167,6 +167,16 @@ static func has_payload() -> bool:
 	return FileAccess.file_exists(PCK_PATH)
 
 
+## Whether the boot scene should load the installed payload pck over the bundled files. Only an
+## exported player build may: an editor/source run (`is_editor`) must play its own `res://`
+## source even when a payload is present, or the last-downloaded shipped pck silently shadows
+## uncommitted changes — the trap that made a freshly-built HUD look like it would not render.
+## Pure (takes the two facts as arguments) so the rule is unit-testable without a real pck or
+## the editor feature flag.
+static func should_load_payload(is_editor: bool, payload_present: bool) -> bool:
+	return payload_present and not is_editor
+
+
 ## The GitHub releases-API path segment a channel resolves to, appended to
 ## `repos/<owner>/<name>/`. Beta names the rolling pre-release by its tag; Stable asks for
 ## `releases/latest`, which GitHub defines as the newest non-prerelease, non-draft release
