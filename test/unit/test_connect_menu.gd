@@ -107,3 +107,17 @@ func test_blank_address_falls_back_to_the_default() -> void:
 	watch_signals(menu)
 	menu._on_join_pressed()
 	assert_signal_emitted_with_parameters(menu, "join_requested", ["203.0.113.9"])
+
+
+func test_settings_dialog_preselects_the_saved_channel() -> void:
+	# The Settings dialog builds its channel picker on the saved channel, so reopening it
+	# always shows the player's current choice rather than resetting to a default.
+	var menu := _menu()
+	var dialog := menu._build_settings_dialog()
+	add_child_autoqfree(dialog)
+	var picker: OptionButton = dialog.find_children("", "OptionButton", true, false)[0]
+	assert_eq(
+		picker.get_item_metadata(picker.selected),
+		Settings.update_channel(),
+		"the channel picker opens on the saved channel"
+	)

@@ -1,7 +1,7 @@
 extends Control
 ## The client's entry point: a small update screen that runs before the game. On a plain
-## windowed launch it checks the rolling `playtest` channel, pulls a newer `game.pck` if one
-## is published, then loads that payload over the bundled seed and hands off to the match. It
+## windowed launch it checks the player's chosen update channel, pulls a newer `game.pck` if
+## one is published, then loads that payload over the bundled seed and hands off to the match. It
 ## is the Godot-native form of the-way-out's launcher loop — the client *is* the launcher, so
 ## "author pushes, player gets it" needs no second app.
 ##
@@ -35,6 +35,9 @@ func _ready() -> void:
 		_hand_off()
 		return
 	_updater = Updater.new()
+	# Point the updater at the player's saved channel (Stable or Beta) before it probes; an
+	# unset or corrupt choice falls back to the default inside Settings.
+	_updater.channel = Settings.update_channel()
 	add_child(_updater)
 	if not _updater.should_check():
 		# Within the throttle window: run the installed payload without a network probe, so a

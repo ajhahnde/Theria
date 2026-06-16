@@ -25,6 +25,14 @@ protocol version.
 
 ## [Unreleased]
 
+### Added
+
+- A **Stable / Beta update channel** toggle in Settings. Beta (the default) keeps every new
+  build arriving automatically, as before; Stable follows only cut releases, for testers who
+  want a steadier client between releases. The choice is saved and applies on the next launch,
+  and a tagged release now ships the same auto-update payload the rolling channel does, so the
+  Stable channel has a build to follow.
+
 ## [v0.2.0] — 2026-06-16
 
 ### Added

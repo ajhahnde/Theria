@@ -38,6 +38,17 @@ const LAST_CHECK_PATH := PAYLOAD_DIR + "/.last_check"
 ## VERSION file; read to gate a pck whose `min_client` outruns this binary.
 const CLIENT_VERSION_PATH := "res://VERSION"
 
+## The two update channels the player can pick between (persisted by `Settings`). Beta
+## pulls the rolling `playtest` pre-release — a fresh pck per green push to main; Stable
+## pulls the latest tagged, non-prerelease GitHub Release, so it moves only on a cut
+## release. Beta is the default: it is the channel the updater shipped on, and the one
+## with a payload before the first Stable target is tagged.
+const CHANNEL_BETA := "beta"
+const CHANNEL_STABLE := "stable"
+const CHANNEL_DEFAULT := CHANNEL_BETA
+## The rolling pre-release tag the Beta channel pulls (the only channel before v0.2.0).
+const BETA_TAG := "playtest"
+
 
 ## Parses the published manifest JSON into a typed dictionary, tolerating anything
 ## malformed: a parse failure or a non-object yields `ok = false` and empty fields,
@@ -154,3 +165,21 @@ static func client_version() -> String:
 ## bundled seed; absent, the client runs the seed it shipped with.
 static func has_payload() -> bool:
 	return FileAccess.file_exists(PCK_PATH)
+
+
+## The GitHub releases-API path segment a channel resolves to, appended to
+## `repos/<owner>/<name>/`. Beta names the rolling pre-release by its tag; Stable asks for
+## `releases/latest`, which GitHub defines as the newest non-prerelease, non-draft release
+## — so the `playtest` pre-release is invisible to Stable and only a cut tag moves it. An
+## unrecognised channel falls back to Beta's path, so a corrupt setting still checks.
+static func release_path(channel: String) -> String:
+	if channel == CHANNEL_STABLE:
+		return "releases/latest"
+	return "releases/tags/" + BETA_TAG
+
+
+## Coerces any stored or passed channel string to a known channel id, defaulting to Beta
+## for anything but an exact Stable — so a hand-edited or future-written settings value can
+## never put the updater in an undefined channel.
+static func normalize_channel(channel: String) -> String:
+	return CHANNEL_STABLE if channel == CHANNEL_STABLE else CHANNEL_BETA

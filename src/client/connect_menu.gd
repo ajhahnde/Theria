@@ -39,6 +39,11 @@ const ADDRESS_MIN_WIDTH := 380.0
 ## names `--bot-difficulty` accepts). Self-contained so the menu stays pure presentation.
 const DIFFICULTY_OPTIONS := [["Easy", "easy"], ["Normal", "normal"], ["Hard", "hard"]]
 
+## The update-channel choices, as `[label, channel id]` pairs for the Settings picker. The
+## ids mirror `UpdateManifest.CHANNEL_STABLE`/`CHANNEL_BETA`; `Settings` normalises whatever
+## is selected, so a label change here can never write an unknown channel.
+const CHANNEL_OPTIONS := [["Stable", "stable"], ["Beta (testing)", "beta"]]
+
 ## The address used when the player leaves the field blank. The driver injects its
 ## own default so the menu and the `--join` flag resolve to one value.
 var default_address := "127.0.0.1"
@@ -61,8 +66,8 @@ var _hero_picker: OptionButton
 ## Picks the bot skill level for a practice match; each item carries its level name as
 ## metadata, emitted on the Practice choice.
 var _difficulty_picker: OptionButton
-## The Settings dialog, built on first open — a placeholder panel until video/audio options
-## land, so the ⚙ Settings affordance exists without yet owning any settings.
+## The Settings dialog, built on first open. Carries the update-channel toggle today;
+## video/audio options join it as they land.
 var _settings_dialog: AcceptDialog
 
 
@@ -197,15 +202,60 @@ func _build_id() -> String:
 	return " · ".join(parts)
 
 
-## Opens the Settings dialog, building it on first use. A placeholder until video/audio
-## options land — the affordance is here so the menu has somewhere to grow them.
+## Opens the Settings dialog, building it on first use. Today it carries the update-channel
+## toggle — Stable (tagged releases only) or Beta (every main build) — written straight to
+## `user://settings.cfg` and applied on the next launch; video/audio options join it later.
 func _open_settings() -> void:
 	if _settings_dialog == null:
-		_settings_dialog = AcceptDialog.new()
-		_settings_dialog.title = "Settings"
-		_settings_dialog.dialog_text = "Settings (video and audio) are coming soon."
+		_settings_dialog = _build_settings_dialog()
 		add_child(_settings_dialog)
 	_settings_dialog.popup_centered()
+
+
+## Builds the Settings dialog: a labelled update-channel picker over a hint that the choice
+## takes effect on the next launch. The picker starts on the saved channel (via `Settings`)
+## and writes each new choice straight back, so closing the dialog needs no Save step. Themed
+## with the shared UiTheme so the popup reads as the same product as the menu behind it.
+func _build_settings_dialog() -> AcceptDialog:
+	var dialog := AcceptDialog.new()
+	dialog.title = "Settings"
+	dialog.theme = UiTheme.make()
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+
+	var label := Label.new()
+	label.text = "Update channel"
+	box.add_child(label)
+
+	var picker := OptionButton.new()
+	for option in CHANNEL_OPTIONS:
+		picker.add_item(option[0])
+		picker.set_item_metadata(picker.item_count - 1, option[1])
+	var saved := Settings.update_channel()
+	for i in picker.item_count:
+		if picker.get_item_metadata(i) == saved:
+			picker.select(i)
+			break
+	picker.item_selected.connect(_on_channel_selected.bind(picker))
+	box.add_child(picker)
+
+	var hint := Label.new()
+	hint.text = "Stable: tagged releases only. Beta: every new build. Applies on next launch."
+	hint.add_theme_color_override("font_color", UiTheme.TEXT_MUTED)
+	hint.add_theme_font_size_override("font_size", FOOTER_FONT_SIZE)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(ADDRESS_MIN_WIDTH, 0)
+	box.add_child(hint)
+
+	dialog.add_child(box)
+	return dialog
+
+
+## Persists the picked update channel. `Settings` normalises the id, so the metadata carried
+## by the selected item is written verbatim; the boot scene reads it on the next launch.
+func _on_channel_selected(index: int, picker: OptionButton) -> void:
+	Settings.set_update_channel(picker.get_item_metadata(index))
 
 
 ## Fills the hero picker from the tribe rosters — one item per hero, labelled

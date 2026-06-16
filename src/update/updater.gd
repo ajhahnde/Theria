@@ -1,7 +1,7 @@
 class_name Updater
 extends Node
-## The network half of the in-client auto-updater: it reaches the rolling `playtest`
-## release on GitHub, decides whether a newer `game.pck` is published, downloads it,
+## The network half of the in-client auto-updater: it reaches the player's chosen release
+## channel on GitHub, decides whether a newer `game.pck` is published, downloads it,
 ## and atomically swaps it into the payload sandbox. The boot scene drives it; all the
 ## judgements (is-it-newer, is-this-client-new-enough, where-do-files-go) live in the
 ## network-free `UpdateManifest`, kept apart so they stay unit-testable.
@@ -32,9 +32,6 @@ signal applied(ok: bool)
 ## release path is built from parts rather than a bare "owner/name" slug.
 const REPO_OWNER := "ajhahnde"
 const REPO_NAME := "Theria"
-## The rolling channel: a single pre-release re-published on every green push to main,
-## so its assets always describe the latest build (see the publish-pck CI job).
-const CHANNEL_TAG := "playtest"
 const MANIFEST_ASSET := "manifest.json"
 ## GitHub's API wants a User-Agent or it 403s; Accept pins the stable API media type.
 const HEADERS: PackedStringArray = [
@@ -51,6 +48,12 @@ const CHECK_INTERVAL_S := 86400.0
 ## Per-request ceiling. A JSON call is tiny; the pck download gets the longer window.
 const REQUEST_TIMEOUT_S := 10.0
 const DOWNLOAD_TIMEOUT_S := 120.0
+
+## Which release channel the updater pulls, set by the boot scene from the player's saved
+## choice before the check runs. Beta (the default) pulls the rolling `playtest` pre-release
+## — a fresh pck per push to main; Stable pulls the latest tagged release. Mapped to the
+## GitHub releases-API path by `UpdateManifest.release_path`.
+var channel := UpdateManifest.CHANNEL_DEFAULT
 
 var _http: HTTPRequest
 ## True while a pck download is in flight, so `_process` emits progress only then.
@@ -235,7 +238,8 @@ func _asset_urls(release_data: Variant) -> Dictionary:
 
 
 func _release_url() -> String:
-	return "https://api.github.com/repos/%s/%s/releases/tags/%s" % [REPO_OWNER, REPO_NAME, CHANNEL_TAG]
+	var path := UpdateManifest.release_path(channel)
+	return "https://api.github.com/repos/%s/%s/%s" % [REPO_OWNER, REPO_NAME, path]
 
 
 ## Creates the payload sandbox if absent. Returns false on a filesystem error, which

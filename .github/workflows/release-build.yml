@@ -48,11 +48,36 @@ jobs:
           test -s build/Theria.exe
           test -s build/Theria-macos.zip
           ls -la build
+      - name: Export game.pck
+        run: |
+          # The Stable channel pulls game.pck + manifest.json from the TAGGED release (the Beta
+          # channel pulls them from the rolling playtest pre-release, published by ci.yml). A
+          # tagged release that carried only launchers would leave Stable with nothing to pull,
+          # so it ships the same payload pair the rolling channel does — exported the same way.
+          ./godot --headless --export-pack "Windows Desktop" build/game.pck
+          test -s build/game.pck
+      - name: Write manifest.json
+        run: |
+          # min_client is the OLDEST launcher that can load this pck. Bump it ONLY when the
+          # launcher contract breaks (the engine line or the autoload/class set changes) — never
+          # per release — or testers would have to re-download the launcher on every build. Kept
+          # in lockstep with the same literal in ci.yml's publish-pck job.
+          MIN_CLIENT="0.1.0"
+          VERSION="$(cat VERSION)"
+          cat > build/manifest.json <<EOF
+          {
+            "version": "${VERSION#v}",
+            "sha": "${GITHUB_SHA}",
+            "pck": "game.pck",
+            "min_client": "${MIN_CLIENT}"
+          }
+          EOF
+          cat build/manifest.json
       - name: Package the Windows launcher
         run: |
           # embed_pck is on, so Theria.exe is the whole launcher — zip it for a clean download.
           cd build && zip -j Theria-windows.zip Theria.exe
-      - name: Attach launchers to the release
+      - name: Attach launchers and the Stable payload to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -61,4 +86,6 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             tag="$(gh release list --limit 1 --json tagName --jq '.[0].tagName')"
           fi
-          gh release upload "$tag" build/Theria-windows.zip build/Theria-macos.zip --clobber
+          gh release upload "$tag" \
+            build/Theria-windows.zip build/Theria-macos.zip \
+            build/game.pck build/manifest.json --clobber
