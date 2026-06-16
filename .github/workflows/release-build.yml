@@ -26,6 +26,10 @@ jobs:
       GODOT_VERSION: "4.6.3"
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The .glb models and .png textures are Git LFS objects; without this the
+          # launcher seed and its embedded pck ship without art and crash on match start.
+          lfs: true
       - name: Download Godot ${{ env.GODOT_VERSION }} + export templates
         run: |
           base="https://github.com/godotengine/godot-builds/releases/download"

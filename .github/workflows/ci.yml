@@ -54,6 +54,11 @@ jobs:
       GODOT_VERSION: "4.6.3"
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The .glb models and .png textures are Git LFS objects; without this the
+          # checkout gets pointer files, the models fail to import ("Not a PNG file"),
+          # and the exported pck ships without art. Pull the real binaries.
+          lfs: true
       - name: Download Godot ${{ env.GODOT_VERSION }} (headless)
         run: |
           base="https://github.com/godotengine/godot-builds/releases/download"
