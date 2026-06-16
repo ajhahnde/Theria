@@ -24,3 +24,9 @@ window/size/mode=2
 [physics]
 
 common/physics_ticks_per_second=60
+
+[rendering]
+
+; Required to export the macOS launcher for Apple Silicon (universal/arm64): the
+; exporter refuses an arm64 build unless ETC2 ASTC VRAM compression is importable.
+textures/vram_compression/import_etc2_astc=true
