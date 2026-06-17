@@ -737,7 +737,8 @@ func _update_overlays(state: SimState) -> void:
 	if _overlays == null:
 		return
 	_overlays.update(
-		_camera_focus(state), state, _player_team(), [HERO_COLOR, BOT_COLOR], SimCore.TICK_RATE
+		_camera_focus(state), state, _player_team(), [HERO_COLOR, BOT_COLOR],
+		SimCore.TICK_RATE, _mode != Mode.CLIENT,
 	)
 
 

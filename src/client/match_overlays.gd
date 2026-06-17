@@ -14,6 +14,7 @@ extends CanvasLayer
 var hud: MatchHud
 var kill_feed: KillFeed
 var chat: MatchChat
+var minimap: Minimap
 var death: DeathOverlay
 
 
@@ -22,22 +23,32 @@ func _ready() -> void:
 	hud.settings_pressed.connect(_on_settings_pressed)
 	kill_feed = KillFeed.new()
 	chat = MatchChat.new()
+	minimap = Minimap.new()
 	death = DeathOverlay.new()
-	# Draw order: the death screen is added last so its dim layers over the HUD when shown.
+	# Draw order: the death screen is added last so its dim layers over the HUD and minimap when shown.
 	add_child(hud)
 	add_child(kill_feed)
 	add_child(chat)
+	add_child(minimap)
 	add_child(death)
 
 
 ## Reconciles every overlay against this tick's world. `focus` is the player's own hero (null
-## before it spawns); `team_colors` are the team draw colours indexed by team id, for the kill
-## feed; `tick_rate` converts the respawn ticks the death screen counts down into seconds.
+## before it spawns); `team_colors` are the team draw colours indexed by team id, for the kill feed
+## and the minimap dots; `tick_rate` converts the respawn ticks the death screen counts down into
+## seconds; `hide_fogged` filters the minimap's enemy dots by vision (set only with local authority,
+## as a pure CLIENT's snapshot is already team-filtered).
 func update(
-	focus: SimEntity, state: SimState, player_team: int, team_colors: Array, tick_rate: int
+	focus: SimEntity,
+	state: SimState,
+	player_team: int,
+	team_colors: Array,
+	tick_rate: int,
+	hide_fogged: bool,
 ) -> void:
 	hud.refresh(focus)
 	kill_feed.observe(state, player_team, team_colors)
+	minimap.update(state, player_team, focus, team_colors, hide_fogged)
 	death.set_respawn(focus.respawn_ticks if focus != null else 0, tick_rate)
 
 
