@@ -25,6 +25,8 @@ protocol version.
 
 ## [Unreleased]
 
+## [v0.4.3] — 2026-06-17
+
 ### Added
 
 - **"Check for updates now" in Settings** — a force-check that bypasses the once-a-day launch

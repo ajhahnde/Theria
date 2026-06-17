@@ -207,8 +207,9 @@ func _build_id() -> String:
 	# by the updater on swap — not the launcher's baked `config/version`, which is frozen at the build
 	# they first downloaded and so reads as "never updates" even after the pck has marched several
 	# versions on. Falls back to the launcher version when running the bundled seed (no payload yet).
-	var content_version := UpdateManifest.payload_version()
-	var version := content_version if not content_version.is_empty() else UpdateManifest.client_version()
+	var version := UpdateManifest.payload_version()
+	if version.is_empty():
+		version = UpdateManifest.client_version()
 	var parts := PackedStringArray(["v%s" % version, "build %s" % build])
 	var status := str(Engine.get_meta(UiTheme.STATUS_META, ""))
 	if not status.is_empty():
@@ -289,8 +290,8 @@ func _on_channel_selected(index: int, picker: OptionButton) -> void:
 
 ## Runs a manual update check that bypasses the launch-time throttle, so a player who just heard a
 ## new build is out can pull it without relaunching. Creates the updater on first use and points it
-## at the saved channel each time (the picker may have just changed it). The downloaded pck is loaded
-## only at the next launch — `load_resource_pack` runs in the boot scene — so a successful apply asks
+## at the saved channel each time (the picker may have just changed it). The downloaded pck loads
+## only at the next launch (`load_resource_pack` runs in the boot scene), so a successful apply asks
 ## for a restart rather than swapping the running game out from under the player.
 func _on_check_now_pressed() -> void:
 	if _updater == null:
@@ -327,9 +328,9 @@ func _on_check_now_progress(ratio: float) -> void:
 	_check_status.text = "Downloading… %d%%" % int(ratio * 100.0)
 
 
-## A manual-check apply finished. On success the new pck is staged live, but the running client still
-## holds the one it booted with (the pck loads at boot, not mid-session), so ask for a restart; on
-## failure the install was left untouched.
+## A manual-check apply finished. On success the new pck is staged live, but the running client
+## still holds the one it booted with (the pck loads at boot, not mid-session), so ask for a
+## restart; on failure the install was left untouched.
 func _on_check_now_applied(ok: bool) -> void:
 	if ok:
 		_finish_check("Updated — restart Theria to apply")
