@@ -598,6 +598,14 @@ func _world(p: Vector2) -> Vector3:
 	return Vector3(p.x, 0.0, p.y)
 
 
+## A sim point placed on the rolling terrain: the flat-ground point lifted by the hill height under
+## it, so a unit's view walks over a mound instead of clipping through it. The sim stays flat — its
+## collision and pathing are 2D on Y = 0; only the rendered node rides the relief. Used for unit
+## roots — the camera, ground plane, marker, and canopy fade stay flat.
+func _ground_at(p: Vector2) -> Vector3:
+	return _world(p) + Vector3(0.0, JungleDecor.height_at(p), 0.0)
+
+
 ## Builds the static 3D scene once: a ground plane spanning the arena, a key light and
 ## an ambient fill so the primitives read with depth, and the follow-camera framing the
 ## arena centre to start. Authored in code (not the .tscn) so the scene file stays a
@@ -737,7 +745,7 @@ func _chat_typing() -> bool:
 ## per-tick update mutates, so nothing is rebuilt while the entity lives.
 func _make_view(entity: SimEntity) -> Dictionary:
 	var root := Node3D.new()
-	root.position = _world(entity.position)
+	root.position = _ground_at(entity.position)
 	add_child(root)
 	var view := {"root": root}
 	view["body"] = _build_body(root, entity)
@@ -807,8 +815,9 @@ func _attach_overlay(view: Dictionary, entity: SimEntity) -> void:
 ## fills, and the status label. Cheap per-tick mutation only — no node is created here.
 func _update_view(view: Dictionary, entity: SimEntity) -> void:
 	var root := view["root"] as Node3D
-	var moved := _world(entity.position) - root.position
-	root.position = _world(entity.position)
+	var placed := _ground_at(entity.position)
+	var moved := placed - root.position
+	root.position = placed
 	root.visible = not entity.is_dead()  # a downed hero's body vanishes behind the death screen
 	if view.has("yaw"):
 		HeroModelLibrary.drive_facing(view, view["body"], Vector2(moved.x, moved.z))

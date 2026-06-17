@@ -79,6 +79,31 @@ const TOTEM_CARVE := Color(0.58, 0.43, 0.20)
 const BANNER_CLOTH := Color(0.64, 0.21, 0.17)
 
 
+## The rolling hills as a samplable height field: each terrain dome recorded as its field-space
+## centre, horizontal radius, and peak height, so a unit's render Y can ride the surface instead of
+## clipping through it. The dome is an exact half-ellipsoid (see `_dome`), so the surface height at
+## a horizontal distance d from a centre is h·√(1 − (d/r)²). Rebuilt each `build()`; the mirrored
+## side swells are recorded on both halves so a hill lifts a unit identically on either team's side.
+static var _hills: Array[Dictionary] = []
+
+
+## The terrain height at a field point: the tallest hill surface over it, or 0 on the flat. Cheap —
+## a distance check per recorded dome, called per unit per frame. The sim stays flat (collision and
+## pathing are 2D); this only lifts the 3D view so a unit walks over a mound rather than through it.
+static func height_at(xz: Vector2) -> float:
+	var y := 0.0
+	for hill in _hills:
+		var r := float(hill["r"])
+		var d := xz.distance_to(hill["pos"])
+		if d >= r:
+			continue
+		var t := d / r
+		var e := float(hill["h"]) * sqrt(1.0 - t * t)
+		if e > y:
+			y = e
+	return y
+
+
 ## Builds every map object under `parent`, batched into a few meshes. Call once, after the ground
 ## plane and MapView decor exist. Returns the FADE material so the caller can feed it the hero's
 ## position each frame (the canopy fade); the solid material never fades.
@@ -90,6 +115,7 @@ const BANNER_CLOTH := Color(0.64, 0.21, 0.17)
 ## cover. By material: `solid` decor (mountains, rocks, walls, hills, camps, low cover) never fades;
 ## only the tall `fade` canopy (palms and trees) dissolves over the player's hero so it stays seen.
 static func build(parent: Node3D) -> ShaderMaterial:
+	_hills.clear()  # rebuilt below as the terrain domes are laid, so height_at() reflects this map
 	var rng := RandomNumberGenerator.new()
 	rng.seed = SCATTER_SEED
 	var solid_mat := _material()
@@ -182,18 +208,20 @@ static func _build_terrain(
 	axis: SurfaceTool, side: SurfaceTool, fade_axis: SurfaceTool, rng: RandomNumberGenerator
 ) -> void:
 	# central landmark: a low mound crowned by a grand tree and ringed with standing stones
-	_dome(axis, _w(Vector2.ZERO), CENTER_RADIUS, 28.0, 3, 9, GRASS_LOW, GRASS_HIGH, 0.05, rng)
-	_tree(fade_axis, Vector3(0.0, 24.0, 0.0), 1.9, rng)  # the grand central tree, on the mound
+	_dome(axis, _w(Vector2.ZERO), CENTER_RADIUS, 18.0, 3, 9, GRASS_LOW, GRASS_HIGH, 0.05, rng)
+	_hills.append({"pos": Vector2.ZERO, "r": CENTER_RADIUS, "h": 18.0})
+	_tree(fade_axis, Vector3(0.0, 14.0, 0.0), 1.9, rng)  # the grand central tree, on the mound
 	var stones := 6
 	for i in stones:
 		var a := TAU * float(i) / float(stones)
 		var p := Vector2(cos(a), sin(a)) * 300.0
-		var top := _w(p) + Vector3(0.0, 18.0, 0.0)
+		var top := _w(p) + Vector3(0.0, 11.0, 0.0)
 		_rock(axis, top, rng.randf_range(70.0, 110.0), rng.randf_range(120.0, 200.0), rng)
 	_build_midline_ridge(axis, rng)
-	# scattered swells — sparse, very low mounds so the ground rolls a little without burying a
-	# hero (the sim is flat, so a tall mound would swallow a unit standing on it) and without a
-	# wide mound's body ever spilling onto a lane, the river, or a building.
+	# scattered swells — sparse, low mounds so the ground rolls a little. A unit's view rides the
+	# surface (height_at, applied client-side), so a mound lifts a hero over it rather than swallowing
+	# it; the swells are still kept off lanes, river, and structures so a wide body never spills onto
+	# a travelled path or a building, and recorded into the height field on both mirror halves.
 	var step := 1500.0
 	var span := MapData.BOUNDS.size.x * 0.5 - FIELD_INSET
 	var x := -span
@@ -211,7 +239,10 @@ static func _build_terrain(
 				continue
 			if _blocked(p, radius + 220.0, radius) or p.length() < CENTER_RADIUS + radius:
 				continue
-			_dome(side, _w(p), radius, rng.randf_range(8.0, 18.0), 3, 8, GRASS_LOW, GRASS_HIGH, 0.08, rng)
+			var height := rng.randf_range(5.0, 11.0)
+			_dome(side, _w(p), radius, height, 3, 8, GRASS_LOW, GRASS_HIGH, 0.08, rng)
+			_hills.append({"pos": p, "r": radius, "h": height})
+			_hills.append({"pos": Vector2(p.y, p.x), "r": radius, "h": height})  # the x = z mirror
 		x += step
 
 
@@ -233,10 +264,10 @@ static func _build_midline_ridge(st: SurfaceTool, rng: RandomNumberGenerator) ->
 			continue
 		if _blocked(p, radius + 160.0, radius):
 			continue
-		_dome(
-			st, _w(p), radius * rng.randf_range(0.85, 1.05), rng.randf_range(24.0, 38.0),
-			3, 8, GRASS_LOW, GRASS_HIGH, 0.10, rng
-		)
+		var rr := radius * rng.randf_range(0.85, 1.05)
+		var hh := rng.randf_range(14.0, 22.0)
+		_dome(st, _w(p), rr, hh, 3, 8, GRASS_LOW, GRASS_HIGH, 0.10, rng)
+		_hills.append({"pos": p, "r": rr, "h": hh})
 
 
 # === scattered jungle growth ===============================================================

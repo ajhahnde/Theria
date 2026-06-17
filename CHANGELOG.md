@@ -25,6 +25,17 @@ protocol version.
 
 ## [Unreleased]
 
+### Added
+
+- Heroes and units now **walk over the hills** instead of clipping through them — a unit's view
+  rides the rolling relief, lifted onto each mound's surface as it crosses. The simulation stays
+  flat (collision and pathing are unchanged); only the rendered view follows the ground.
+
+### Changed
+
+- The **hills sit flatter** — the scattered swells, the midline ridge, and the central landmark
+  mound were all lowered, so the relief reads as gently rolling ground rather than steep domes.
+
 ## [v0.4.0] — 2026-06-17
 
 ### Added
