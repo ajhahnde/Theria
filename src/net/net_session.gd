@@ -22,6 +22,8 @@ signal client_left(peer_id: int)
 signal joined_server(team: int)
 ## Client: the server refused us (today: a protocol-version mismatch).
 signal rejected(reason: String)
+## Client: the connection attempt reached no server — nothing answered at the address.
+signal connect_failed
 ## Client: the server connection was lost.
 signal server_left
 
@@ -78,6 +80,7 @@ func start_client(address: String, port: int = DEFAULT_PORT) -> Error:
 	multiplayer.multiplayer_peer = peer
 	is_server = false
 	multiplayer.connected_to_server.connect(_on_connected_to_server)
+	multiplayer.connection_failed.connect(func() -> void: connect_failed.emit())
 	multiplayer.server_disconnected.connect(func() -> void: server_left.emit())
 	return OK
 

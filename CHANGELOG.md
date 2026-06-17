@@ -30,6 +30,11 @@ protocol version.
 - Heroes and units now **walk over the hills** instead of clipping through them — a unit's view
   rides the rolling relief, lifted onto each mound's surface as it crosses. The simulation stays
   flat (collision and pathing are unchanged); only the rendered view follows the ground.
+- A connection that fails now shows an **in-client error screen** — a headline, an error code
+  (E-1001…E-1005), and what went wrong — with **Back to Menu** and **Quit**, instead of a silent
+  grey screen or an abrupt quit. Covers a host that cannot open its port, a refused or dropped
+  connection, and — via a join timeout — a server that never answers, so a join to a down host
+  reports "could not reach the server" rather than hanging.
 
 ### Changed
 
