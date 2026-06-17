@@ -11,6 +11,12 @@ extends RefCounted
 const TICK_RATE := 60
 const TICK_DELTA := 1.0 / TICK_RATE
 
+## A hero's body radius for collision — how far its centre is kept from an obstacle's surface. One
+## shared value for v1: the mobile non-creep units (heroes) collide as they move; lane creeps march
+## uncollided so a wave is never jammed on its own forward tower, and structures never move. Read by
+## `apply_movement` here and by the nav grid, so a routed path and the resolve agree.
+const UNIT_RADIUS := 40.0
+
 ## Tower combat tuning. A tower out-ranges and chips a unit that wanders into it,
 ## but takes many shots to kill — pressure, not an instant wall.
 const TOWER_HP := 1000
@@ -215,8 +221,17 @@ static func apply_movement(entity: SimEntity, command: InputCommand) -> void:
 		move_dir = command.move_dir
 	if move_dir.length() > 1.0:
 		move_dir = move_dir.normalized()
+	var from := entity.position
 	entity.position += move_dir * entity.current_move_speed() * TICK_DELTA
 	entity.position = MapData.clamp_to_bounds(entity.position)
+	# Resolve a moving unit out of the solid obstacles, keeping the tangential slide along them. The
+	# gate is the same "mobile, non-creep" predicate the client identifies its hero by (main.gd
+	# `_local_hero`), so the decoded snapshot the client predicts on — which carries no is_hero flag —
+	# runs byte-identical math to the server and reconciliation lands exactly. Lane creeps march
+	# uncollided (so a wave never jams on its own forward tower) and a still unit is never shoved off
+	# its spot — collision resolves movement, not placement.
+	if move_dir != Vector2.ZERO and not entity.is_structure and not entity.is_creep:
+		entity.position = MapData.slide(from, entity.position, UNIT_RADIUS)
 
 
 ## On a wave tick, spawns one creep wave per team per lane. Driven off

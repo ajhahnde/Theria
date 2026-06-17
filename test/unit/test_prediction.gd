@@ -98,6 +98,50 @@ func test_apply_movement_holds_still_on_null_command() -> void:
 	assert_eq(entity.position, Vector2(10.0, -5.0), "a null command moves nothing")
 
 
+# --- collision: a moving unit is blocked, and prediction matches the server through it ----------
+
+
+func test_a_moving_hero_stops_at_an_obstacle_edge() -> void:
+	var center := MapData.tower_positions(0)[0]
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var hero := sim.add_hero(0, center + Vector2(600.0, 0.0), 320.0)
+	for _i in 300:
+		sim.step({hero: _command(Vector2.LEFT)})  # drive straight at the obstacle
+	var pos := sim.state.get_entity(hero).position
+	assert_false(
+		MapData.point_blocked(pos, SimCore.UNIT_RADIUS),
+		"a hero driven into an obstacle never ends up inside it",
+	)
+	assert_gt(pos.x, center.x, "it is stopped on its approach side, not pushed through")
+
+
+func test_prediction_matches_the_server_through_an_obstacle() -> void:
+	# The decoded snapshot the client predicts on carries no is_hero flag, but the collision gate is
+	# the same "mobile, non-creep" predicate, so the replay collides exactly as the server does.
+	var start := MapData.tower_positions(0)[0] + Vector2(600.0, 0.0)
+	var inputs: Array = []
+	for _i in 30:
+		inputs.append(_command(Vector2.LEFT))
+	var acked := 15
+	var server := SimCore.new()
+	server.spawn_creeps = false
+	var hero_id := server.add_hero(0, start, 320.0)
+	for i in acked:
+		server.step({hero_id: inputs[i]})
+	var snapshot := NetProtocol.decode_snapshot(NetProtocol.encode_snapshot(server.state, acked))
+	var predicted := snapshot.get_entity(hero_id)
+	for i in range(acked, inputs.size()):
+		SimCore.apply_movement(predicted, inputs[i])
+	for i in range(acked, inputs.size()):
+		server.step({hero_id: inputs[i]})
+	assert_eq(
+		predicted.position,
+		server.state.get_entity(hero_id).position,
+		"prediction with collision lands exactly on the authoritative position",
+	)
+
+
 func _command(dir: Vector2) -> InputCommand:
 	var command := InputCommand.new()
 	command.move_dir = dir

@@ -45,17 +45,15 @@ const SPAWN_CLEAR := 380.0
 ## the jungle, so the growth thins toward the travelled lanes.
 const JUNGLE_FULL := 1050.0
 
-## Jungle walls (LoL-style paths): a wall of mixed boulders runs each side of every lane, set
-## back LANE_WALL_OFFSET past the path and stepped at WALL_STEP, broken by a GAP_SPAN opening
-## every GAP_PERIOD (the gank gaps), so the jungle reads as corridors a unit threads rather than
-## one open field. Each camp gets a rock ring POCKET_RADIUS out with one entrance. (Presentation
-## only for now — solid blocking waits on the deferred navigation slice; a unit still walks
-## through them until then.)
-const LANE_WALL_OFFSET := LANE_HALF + 320.0
-const WALL_STEP := 150.0
-const GAP_PERIOD := 1500.0
-const GAP_SPAN := 340.0
-const POCKET_RADIUS := 360.0
+## Jungle walls (LoL-style paths): a boulder is drawn on every blocker point MapData lays down —
+## the lane-flanking walls (broken by the gank gaps) and the camp pockets — so the rocks you see
+## are exactly the rocks that block. The layout, its offsets, gaps, and the y = x mirror all live in
+## MapData (the shared collision source); this file only dresses each point. Each visual boulder is
+## sized a little larger than its collision footprint (MapData.WALL_RADIUS) so the solid circle
+## always sits within the rock a player sees.
+const BLOCKER_ROCK_MIN := 120.0  # ≥ MapData.WALL_RADIUS + the jitter below, so the rock covers it
+const BLOCKER_ROCK_MAX := 175.0
+const BLOCKER_JITTER := 20.0
 
 ## The central landmark: a wide low mound at the map centre crowned by one grand tree and ringed
 ## with standing stones, so the middle of the symmetric map is unmistakable. Its footprint is
@@ -102,7 +100,7 @@ static func build(parent: Node3D) -> ShaderMaterial:
 	var fade_side := _new_surface()
 	_build_wall(solid_side, fade_side, rng)
 	_build_terrain(solid_axis, solid_side, fade_axis, rng)
-	_build_lane_walls(solid_side, rng)
+	_build_blockers(solid_axis, rng)
 	_build_plants(solid_side, fade_side, rng)
 	_build_camps(solid_axis, solid_side, rng)
 	_emit(parent, solid_mat, solid_axis, false)
@@ -314,7 +312,6 @@ static func _build_camps(axis: SurfaceTool, side: SurfaceTool, rng: RandomNumber
 			var p := camp + Vector2(cos(a), sin(a)) * rng.randf_range(150.0, 195.0)
 			_rock(st, _w(p), rng.randf_range(55.0, 95.0), rng.randf_range(70.0, 140.0), rng)
 		_totem(st, _w(camp), rng)
-		_camp_pocket(st, camp, rng)
 
 
 ## A carved totem post: stacked wood blocks on a base, a bright carved cap, and a banner cloth
@@ -332,71 +329,24 @@ static func _totem(st: SurfaceTool, foot: Vector3, rng: RandomNumberGenerator) -
 
 # === jungle walls (LoL-style paths) ========================================================
 
-## Lays the lane-flanking rock walls for every lane, both sides. Only team 0's half is built (a
-## wall boulder is placed where its point is on that side of the y = x axis); the caller's mirror
-## reflects the rest. Each lane is its own reflection across the axis, so the halves still line up.
-static func _build_lane_walls(st: SurfaceTool, rng: RandomNumberGenerator) -> void:
-	for lane in MapData.LANES:
-		_lane_wall(st, lane, 1.0, rng)
-		_lane_wall(st, lane, -1.0, rng)
-
-
-## Walks one lane corridor and lays a wall of boulders offset to one side (`sign`), stepping along
-## each segment and pushing out along the segment normal. Skips a gap every GAP_PERIOD (the gank
-## openings), the river crossings, anything near a structure, and team 1's half.
-static func _lane_wall(
-	st: SurfaceTool, lane: Array, sign: float, rng: RandomNumberGenerator
-) -> void:
-	var travelled := 0.0
-	for i in lane.size() - 1:
-		var a: Vector2 = lane[i]
-		var b: Vector2 = lane[i + 1]
-		var seg := b - a
-		var length := seg.length()
-		if length < 1.0:
-			continue
-		var dir := seg / length
-		var normal := Vector2(-dir.y, dir.x) * sign
-		var t := 0.0
-		while t < length:
-			var p := a + dir * t + normal * LANE_WALL_OFFSET
-			t += WALL_STEP
-			travelled += WALL_STEP
-			if fmod(travelled, GAP_PERIOD) < GAP_SPAN:  # a gank opening
-				continue
-			if p.y < p.x:  # team 1's half — the mirror fills it
-				continue
-			if _near_river(p) < 280.0 or _blocked(p, 240.0):
-				continue
-			_rock_wall_point(st, p, rng)
-
-
-## A rough rock ring walling a camp, open toward the map centre so there is one entrance. The
-## opening direction lies along the camp→centre line, which is mirror-invariant for an on-axis
-## camp, so the pocket stays symmetric.
-static func _camp_pocket(st: SurfaceTool, camp: Vector2, rng: RandomNumberGenerator) -> void:
-	var gap_dir := -camp.normalized() if camp.length() > 0.1 else Vector2.RIGHT
-	var count := 18
-	for i in count:
-		var ang := TAU * float(i) / float(count)
-		var d := Vector2(cos(ang), sin(ang))
-		if d.dot(gap_dir) > 0.6:  # the entrance opening
-			continue
-		var p := camp + d * (POCKET_RADIUS + rng.randf_range(-30.0, 30.0))
-		if _near_lane(p) < 200.0 or _near_river(p) < 200.0 or _blocked(p, 200.0):
-			continue
-		_rock_wall_point(st, p, rng)
-
-
-## One stretch of wall: a boulder at `p`, mixed big or small with a little jitter, sized so a run
-## of them at WALL_STEP spacing overlaps into a continuous rocky wall.
-static func _rock_wall_point(st: SurfaceTool, p: Vector2, rng: RandomNumberGenerator) -> void:
-	var jitter := Vector2(rng.randf_range(-40.0, 40.0), rng.randf_range(-40.0, 40.0))
-	var foot := _w(p + jitter)
-	if rng.randf() < 0.45:
-		_rock(st, foot, rng.randf_range(120.0, 180.0), rng.randf_range(150.0, 250.0), rng)
-	else:
-		_rock(st, foot, rng.randf_range(55.0, 95.0), rng.randf_range(75.0, 135.0), rng)
+## Draws a boulder on every blocker point MapData lays down — the lane-flanking walls (with their
+## gank gaps) and the camp pockets, both halves already mirrored in the data. Drawn once onto the
+## non-mirrored `axis` batch (the points carry their own y = x partners), so what renders matches
+## the collision set one-for-one. Each rock is sized a little over MapData.WALL_RADIUS, with only a
+## small jitter, so the solid circle always sits inside the boulder a player sees.
+static func _build_blockers(st: SurfaceTool, rng: RandomNumberGenerator) -> void:
+	for p in MapData.jungle_wall_points():
+		var jitter := Vector2(
+			rng.randf_range(-BLOCKER_JITTER, BLOCKER_JITTER),
+			rng.randf_range(-BLOCKER_JITTER, BLOCKER_JITTER),
+		)
+		_rock(
+			st,
+			_w(p + jitter),
+			rng.randf_range(BLOCKER_ROCK_MIN, BLOCKER_ROCK_MAX),
+			rng.randf_range(160.0, 260.0),
+			rng,
+		)
 
 
 # === plant builders ========================================================================

@@ -36,10 +36,18 @@ protocol version.
 - All of the scattered decor is **mirrored across the map's symmetry axis**, so the two teams'
   jungle halves are exact reflections and neither side has more cover.
 - A first pass of **jungle structure**: rock walls flank each lane and ring each camp, broken by
-  openings, so the jungle reads as distinct corridors rather than one open field. (The walls are
-  presentation for now — they do not yet block movement.)
+  openings, so the jungle reads as distinct corridors rather than one open field.
 - The tall **canopy fades to its outline** over the player's hero as the camera passes through it,
   so a unit under a palm stays visible. All of it is toon-shaded to match the field units.
+- **Collision**: heroes can no longer walk through the towers, the nexus, or the jungle rock walls
+  — the structures and walls are now solid bodies a hero slides along. Lane creeps still march
+  their corridors freely, and the river stays open. The rocks you see are the rocks that block: the
+  collision shapes and the boulders the jungle is drawn from come from one shared layout, mirrored
+  across the map axis so neither team has more cover.
+- **Click-to-move auto-pathing**: a move order now routes the hero *around* the obstacles instead of
+  walking it into a wall, threading the gank gaps and rounding the towers — and the bots approach
+  through the same routing. Pathing runs on a deterministic grid in the simulation, so an online
+  hero's predicted route still reconciles exactly with the server and a bot match replays identically.
 
 ## [v0.3.4] — 2026-06-16
 

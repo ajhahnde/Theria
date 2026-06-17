@@ -236,3 +236,23 @@ func test_a_brawler_closes_a_point_blank_enemy() -> void:
 	sim.add_entity(1, Vector2(150.0, 0.0), 0.0, 600)
 	var command := _bot().decide(sim.state, id)
 	assert_gt(command.move_dir.x, 0.0, "a brawler closes the gap rather than kiting away")
+
+
+func test_a_brawler_routes_around_a_blocking_obstacle() -> void:
+	var sim := SimCore.new()
+	sim.spawn_creeps = false
+	var center := MapData.tower_positions(0)[0]
+	var bot := _hero(sim, "snake", center + Vector2(700.0, 0.0))
+	var enemy_pos := center - Vector2(700.0, 0.0)
+	sim.add_entity(1, enemy_pos, 0.0, 600)  # an enemy on the far side of the obstacle
+	var bot_pos := sim.state.get_entity(bot).position
+	var nav := NavGrid.shared()
+	assert_false(nav.segment_clear(bot_pos, enemy_pos), "the straight line runs through the obstacle")
+	var command := _bot().decide(sim.state, bot)
+	var straight := (enemy_pos - bot_pos).normalized()
+	assert_gt(command.move_dir.length(), 0.0, "the bot advances on the enemy")
+	assert_gt(command.move_dir.distance_to(straight), 0.01, "it steers around, not straight in")
+	assert_true(
+		nav.segment_clear(bot_pos, bot_pos + command.move_dir * 300.0),
+		"the step it takes is onto clear ground",
+	)

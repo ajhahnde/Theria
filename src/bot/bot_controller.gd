@@ -28,6 +28,11 @@ enum Difficulty { EASY, NORMAL, HARD }
 ## Stop advancing once within this many world units of the target.
 const STOP_RANGE := 60.0
 
+## Ticks a cached approach route is reused before recomputing. Routing every tick is far too
+## expensive (a full A* per bot per frame), and a route a fraction of a second old still steers a
+## bot fine toward a moving target.
+const ROUTE_REFRESH_TICKS := 15
+
 ## The ability bar is four slots (0..3) per form; the bot scans them in order so its
 ## pick is deterministic by slot rather than by dictionary iteration order.
 const SLOT_COUNT := 4
@@ -71,6 +76,10 @@ const DIFFICULTY_NAMES := {
 ## setting (EASY by default, so practice is winnable).
 var difficulty: int = Difficulty.HARD
 
+## Per-bot cached approach route: bot id -> {path, index, tick}. Carried across ticks; a pure
+## function of the (deterministic) state sequence, so a bot match still replays identically.
+var _routes: Dictionary = {}
+
 
 func decide(state: SimState, bot_id: int) -> InputCommand:
 	var command := InputCommand.new()
@@ -83,12 +92,41 @@ func decide(state: SimState, bot_id: int) -> InputCommand:
 	if bot.is_hero and bot.stance == AbilityData.STANCE_KITE:
 		_kite_move(command, bot, target, state.tick)
 	else:
-		var offset := target.position - bot.position
-		if offset.length() > STOP_RANGE:
-			command.move_dir = offset.normalized()
+		if bot.position.distance_to(target.position) > STOP_RANGE:
+			command.move_dir = _approach_dir(bot, target, state.tick)
 	if bot.is_hero:
 		_choose_cast(command, bot, target, state.tick)
 	return command
+
+
+## The direction to advance on a target: straight at it in the open (the common case, exactly the
+## old `offset.normalized()`), or along a routed path around the obstacles when the straight line is
+## blocked. The route is cached per bot and refreshed only every ROUTE_REFRESH_TICKS — an A* every
+## frame per bot is what dropped the game to a slideshow, and a third-of-a-second-old route still
+## steers fine toward a moving target. Deterministic (the nav grid is pure and the cache is a
+## function of the replayable state), so a bot match still replays identically.
+func _approach_dir(bot: SimEntity, target: SimEntity, tick: int) -> Vector2:
+	var to_target := target.position - bot.position
+	if to_target.length() < 0.0001:
+		return Vector2.ZERO
+	var nav := NavGrid.shared()
+	if nav.segment_clear(bot.position, target.position):
+		_routes.erase(bot.id)  # clear line — drop any detour and head straight in
+		return to_target.normalized()
+	var route: Dictionary = _routes.get(bot.id, {})
+	if route.is_empty() or tick - int(route["tick"]) >= ROUTE_REFRESH_TICKS:
+		route = {"path": nav.find_path(bot.position, target.position), "index": 0, "tick": tick}
+		_routes[bot.id] = route
+	var path: PackedVector2Array = route["path"]
+	var idx: int = route["index"]
+	while idx < path.size() and bot.position.distance_to(path[idx]) <= STOP_RANGE:
+		idx += 1
+	route["index"] = idx
+	if idx < path.size():
+		var leg := path[idx] - bot.position
+		if leg.length() > 0.0001:
+			return leg.normalized()
+	return to_target.normalized()
 
 
 ## Maps a difficulty name — the `--bot-difficulty` value and the menu's metadata — to a
@@ -262,13 +300,13 @@ func _kite_move(command: InputCommand, bot: SimEntity, target: SimEntity, tick: 
 	var band := _kite_band(bot)
 	if band == Vector2.ZERO:
 		if dist > STOP_RANGE:
-			command.move_dir = to_enemy / dist
+			command.move_dir = _approach_dir(bot, target, tick)
 		return
 	if dist < band.x:
 		if _may_step_back(bot, tick):
-			command.move_dir = -to_enemy / dist
+			command.move_dir = -to_enemy / dist  # backing off — straight away, slid off a wall behind
 	elif dist > band.y:
-		command.move_dir = to_enemy / dist
+		command.move_dir = _approach_dir(bot, target, tick)
 
 
 ## Whether `tick` is one of this kiter's retreat beats — the footwork handicap that lets a

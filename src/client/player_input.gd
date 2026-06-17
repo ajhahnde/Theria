@@ -21,6 +21,11 @@ const STOP_KEY := KEY_S
 ## one" rather than "walk here" — its footprint plus a little slop.
 const ENEMY_PICK_RADIUS := 90.0
 
+## How many ticks a chase's routed direction is reused before recomputing — an A* every tick while
+## attack-moving a target behind a wall is too costly, and a few-tick-old direction still tracks a
+## moving enemy fine.
+const CHASE_REFRESH_TICKS := 10
+
 ## The standing click-to-move destination (a sim point); `has_move_target` gates it. Read by
 ## the presenter to draw the destination marker.
 var move_target: Vector2 = Vector2.ZERO
@@ -28,6 +33,15 @@ var has_move_target: bool = false
 ## Right-clicking an enemy sets this to its id: the hero closes on it and the combat step
 ## strikes it (LoL-style attack-on-click). 0 means the last order was a plain ground move.
 var attack_target_id: int = 0
+
+## The routed path behind the standing move order — the NavGrid waypoints from the hero to
+## `move_target`, bending around the jungle walls and towers, walked one leg at a time via
+## `_path_index`. Empty when there is no move order or the hero is closing on an attack target.
+var _path: PackedVector2Array = PackedVector2Array()
+var _path_index: int = 0
+
+var _chase_dir_cache: Vector2 = Vector2.ZERO
+var _chase_cooldown: int = 0
 
 var _camera: Camera3D = null
 
@@ -48,7 +62,7 @@ func sample(state: SimState, hero: SimEntity, team: int, cast_abilities: bool) -
 		_halt()
 		return command
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		_issue_order(state, team, _mouse_world_point())
+		_issue_order(state, hero, team, _mouse_world_point())
 	if Input.is_physical_key_pressed(STOP_KEY):
 		_halt()
 	command.move_dir = _move_dir(hero, state)
@@ -60,15 +74,30 @@ func sample(state: SimState, hero: SimEntity, team: int, cast_abilities: bool) -
 ## Resolves a right-click into an order: clicking on an enemy attacks it (the hero closes to
 ## attack range, then the combat step strikes it), clicking open ground walks there. One button
 ## both moves and engages — lighter than LoL's separate attack-move key.
-func _issue_order(state: SimState, team: int, point: Vector2) -> void:
+func _issue_order(state: SimState, hero: SimEntity, team: int, point: Vector2) -> void:
 	var enemy := _enemy_under(state, team, point)
 	if enemy != 0:
 		attack_target_id = enemy
 		has_move_target = false
+		_path = PackedVector2Array()
 	else:
 		attack_target_id = 0
 		move_target = point
 		has_move_target = true
+		_set_path(hero, point)
+
+
+## Routes the standing move order around the obstacles: asks the nav grid for a path to `point` and
+## stores it to walk leg by leg. Falls back to a straight line to the click when the grid finds none
+## (or the hero has not spawned yet), so a move order always produces motion.
+func _set_path(hero: SimEntity, point: Vector2) -> void:
+	_path_index = 0
+	if hero == null:
+		_path = PackedVector2Array([point])
+		return
+	_path = NavGrid.shared().find_path(hero.position, point)
+	if _path.is_empty():
+		_path = PackedVector2Array([point])
 
 
 ## Cancels the standing order so the hero plants where it stands — the move target and the
@@ -77,6 +106,8 @@ func _issue_order(state: SimState, team: int, point: Vector2) -> void:
 func _halt() -> void:
 	has_move_target = false
 	attack_target_id = 0
+	_path = PackedVector2Array()
+	_path_index = 0
 
 
 ## This tick's movement direction: closing on the attack target when one is set, else the
@@ -86,15 +117,29 @@ func _move_dir(hero: SimEntity, state: SimState) -> Vector2:
 		return _chase_dir(hero, state)
 	if not has_move_target or hero == null:
 		return Vector2.ZERO
-	# Unit vector toward the target while far; within a single tick's reach, a sub-unit vector
-	# that lands the hero exactly on it (apply_movement scales a move_dir under length 1 down),
-	# so it stops on the point rather than overshooting. Then the target is cleared.
-	var to_target := move_target - hero.position
-	var step := hero.current_move_speed() * SimCore.TICK_DELTA
-	if step <= 0.0 or to_target.length() <= step:
-		has_move_target = false
-		return to_target / step if step > 0.0 else Vector2.ZERO
-	return to_target.normalized()
+	return _follow_path(hero)
+
+
+## This tick's direction along the routed path: head for the current waypoint, advancing to the next
+## as each is reached, and on the final leg return a sub-unit vector that lands the hero exactly on
+## the destination (apply_movement scales a move_dir under length 1 down) before clearing the order.
+## Mirrors the creep waypoint-follow in SimCore — an empty or exhausted path stops the hero.
+func _follow_path(hero: SimEntity) -> Vector2:
+	while _path_index < _path.size():
+		var to_target := _path[_path_index] - hero.position
+		if _path_index < _path.size() - 1:
+			if to_target.length() <= SimCore.WAYPOINT_ARRIVE_RADIUS:
+				_path_index += 1
+				continue
+			return to_target.normalized()
+		# the final waypoint — stop exactly on it
+		var step := hero.current_move_speed() * SimCore.TICK_DELTA
+		if step <= 0.0 or to_target.length() <= step:
+			has_move_target = false
+			return to_target / step if step > 0.0 else Vector2.ZERO
+		return to_target.normalized()
+	has_move_target = false
+	return Vector2.ZERO
 
 
 ## Movement toward the attack target: close until the hero is inside its own attack range —
@@ -109,7 +154,19 @@ func _chase_dir(hero: SimEntity, state: SimState) -> Vector2:
 	var reach := hero.attack_range if hero.attack_range > 0.0 else SimCore.HERO_RANGE
 	if to_target.length() <= reach:
 		return Vector2.ZERO
-	return to_target.normalized()
+	# Straight line clear: close directly. Blocked: route around it, but refresh the routed direction
+	# only every CHASE_REFRESH_TICKS so the A* runs a few times a second, not every frame.
+	var nav := NavGrid.shared()
+	if nav.segment_clear(hero.position, target.position):
+		return to_target.normalized()
+	_chase_cooldown -= 1
+	if _chase_cooldown <= 0:
+		var path := nav.find_path(hero.position, target.position)
+		_chase_dir_cache = (
+			(path[0] - hero.position).normalized() if path.size() > 0 else to_target.normalized()
+		)
+		_chase_cooldown = CHASE_REFRESH_TICKS
+	return _chase_dir_cache
 
 
 ## The id of an enemy under `point` (within a click's slop of its body), or 0 for open ground —

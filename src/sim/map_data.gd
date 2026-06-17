@@ -121,6 +121,47 @@ const TOWER_SLOTS: Array[Vector2] = [
 	Vector2(3720.0, 840.0),
 ]
 
+# === Collision obstacles ===================================================================
+## The solid bodies a moving unit cannot enter and a path routes around: the structures and the
+## jungle rock walls. Every obstacle is a circle ({center, radius}); a wall is a chain of
+## overlapping circles. The river and the fine cosmetic scatter stay walkable. Derived purely
+## from the geometry above (lanes, river, camps, towers, nexuses) and closed under the y = x
+## mirror, so collision is team-fair and shares one source of truth with the sim, the bots, the
+## nav grid, the tests, and the decor that draws these same rocks. A unit's body radius is owned
+## by the sim (SimCore.UNIT_RADIUS); the radii here are the bare obstacle footprints.
+
+## A tower's and the nexus's solid footprint. A forward tower sits on a lane waypoint, so heroes
+## route around it while lane creeps (which never collide) still file past — see `obstacles`.
+const TOWER_RADIUS := 200.0
+const NEXUS_RADIUS := 320.0
+
+## Jungle rock walls: a wall of blocker rocks runs each side of every lane, set back
+## LANE_WALL_OFFSET past the path centre, a rock every WALL_STEP (radius WALL_RADIUS, sized so a
+## run of them overlaps into a continuous wall even inflated by a unit's body), broken by a
+## WALL_GAP_SPAN opening every WALL_GAP_PERIOD — the gank gaps a unit threads. No rock lands
+## within WALL_RIVER_CLEAR of the river (the lane fords stay open) or WALL_STRUCT_CLEAR of a
+## structure (a tower keeps its own clearance). These mirror the decor that draws them.
+const WALL_RADIUS := 95.0
+const LANE_WALL_OFFSET := 435.0  # LANE half-width (115) + a 320 setback
+const WALL_STEP := 150.0
+const WALL_GAP_PERIOD := 1500.0
+const WALL_GAP_SPAN := 340.0
+const WALL_RIVER_CLEAR := 300.0
+const WALL_STRUCT_CLEAR := 360.0
+const WALL_SPAWN_CLEAR := 700.0  # no wall rock near a base fountain — the team spawns free
+
+## A neutral camp's rock pocket: a ring of blocker rocks CAMP_POCKET_RADIUS out, left open over
+## the CAMP_POCKET_GAP arc facing the map centre so the camp has one entrance. Each ring point is
+## paired with its y = x mirror, so the pockets stay team-fair like the camps they wall.
+const CAMP_POCKET_RADIUS := 360.0
+const CAMP_POCKET_POINTS := 12
+const CAMP_POCKET_GAP := 0.5  # cos-threshold of the entrance arc toward the centre
+const CAMP_FEATURE_CLEAR := 200.0  # no pocket rock on a lane or in the river
+
+## Lazily-built cache of the obstacle circles — the map is static, so this is baked once and
+## reused by the per-tick collision, the nav grid, and the tests.
+static var _obstacles: Array = []
+
 
 ## Reflection across the diagonal axis y = x — the map's mirror. An involution (its own inverse)
 ## that swaps the two bases, so team 1's geometry is team 0's mirrored.
@@ -202,3 +243,176 @@ static func clamp_to_bounds(pos: Vector2) -> Vector2:
 		clampf(pos.x, BOUNDS.position.x, BOUNDS.end.x),
 		clampf(pos.y, BOUNDS.position.y, BOUNDS.end.y),
 	)
+
+
+## The solid obstacle circles (each `{center: Vector2, radius: float}`): every team's towers and
+## nexus, plus the jungle rock walls and camp pockets. Baked once and cached — the map is static.
+## Closed under the y = x mirror, so the set is team-fair. Callers must treat it as read-only.
+static func obstacles() -> Array:
+	if _obstacles.is_empty():
+		_obstacles = _build_obstacles()
+	return _obstacles
+
+
+static func _build_obstacles() -> Array:
+	var out: Array = []
+	for team in NEXUS_POSITIONS.size():
+		for slot in tower_positions(team):
+			out.append({"center": slot, "radius": TOWER_RADIUS})
+		out.append({"center": nexus_for_team(team), "radius": NEXUS_RADIUS})
+	for p in jungle_wall_points():
+		out.append({"center": p, "radius": WALL_RADIUS})
+	return out
+
+
+## The rock centres of the jungle walls and camp pockets — the blocker layout, shared by the sim
+## (wrapped into WALL_RADIUS circles in `obstacles`) and the decor (which draws a boulder on each).
+## Generated on team 0's side of the y = x axis and mirrored, so the layout is exactly symmetric.
+static func jungle_wall_points() -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for lane in LANES:
+		_lane_wall_points(pts, lane, 1.0)
+		_lane_wall_points(pts, lane, -1.0)
+	for camp in JUNGLE_CAMPS:
+		if camp.y < camp.x:
+			continue  # team 1's side — the mirror below fills it
+		_camp_pocket_points(pts, camp)
+	return pts
+
+
+## Lays a wall of blocker points down one side (`sign`) of a lane corridor: stepping along each
+## segment, pushed out LANE_WALL_OFFSET along the segment normal, skipping the gank gaps, the
+## river crossings, and structure clearances. Each kept point (on team 0's half) is paired with
+## its mirror, so the wall is symmetric across y = x.
+static func _lane_wall_points(out: PackedVector2Array, lane: Array, sign: float) -> void:
+	var travelled := 0.0
+	for i in lane.size() - 1:
+		var a: Vector2 = lane[i]
+		var b: Vector2 = lane[i + 1]
+		var seg := b - a
+		var length := seg.length()
+		if length < 1.0:
+			continue
+		var dir := seg / length
+		var normal := Vector2(-dir.y, dir.x) * sign
+		var t := 0.0
+		while t < length:
+			var p := a + dir * t + normal * LANE_WALL_OFFSET
+			t += WALL_STEP
+			travelled += WALL_STEP
+			if fmod(travelled, WALL_GAP_PERIOD) < WALL_GAP_SPAN:
+				continue  # a gank opening
+			if p.y < p.x:
+				continue  # team 1's half — paired by the mirror below
+			if _dist_to_polyline(p, RIVER) < WALL_RIVER_CLEAR:
+				continue
+			if _dist_to_structures(p) < WALL_STRUCT_CLEAR:
+				continue
+			if _dist_to_spawns(p) < WALL_SPAWN_CLEAR:
+				continue
+			out.append(p)
+			out.append(mirror(p))
+
+
+## Rings a neutral camp with blocker points CAMP_POCKET_RADIUS out, leaving the arc toward the map
+## centre open as the single entrance, and skipping any point on a lane or in the river. Each kept
+## point is paired with its mirror so an off-axis camp's pocket and its partner camp's match, and
+## an on-axis camp's pocket comes out symmetric.
+static func _camp_pocket_points(out: PackedVector2Array, camp: Vector2) -> void:
+	var gap_dir := -camp.normalized() if camp.length() > 0.1 else Vector2.RIGHT
+	for i in CAMP_POCKET_POINTS:
+		var ang := TAU * float(i) / float(CAMP_POCKET_POINTS)
+		var d := Vector2(cos(ang), sin(ang))
+		if d.dot(gap_dir) > CAMP_POCKET_GAP:
+			continue  # the entrance opening toward the centre
+		var p := camp + d * CAMP_POCKET_RADIUS
+		if _dist_to_lanes(p) < CAMP_FEATURE_CLEAR or _dist_to_polyline(p, RIVER) < CAMP_FEATURE_CLEAR:
+			continue
+		if _dist_to_spawns(p) < WALL_SPAWN_CLEAR:
+			continue
+		out.append(p)
+		out.append(mirror(p))
+
+
+## Whether a unit of the given body radius standing at `p` would overlap any obstacle — used by the
+## chase router and the nav-grid bake to test a point for free space.
+static func point_blocked(p: Vector2, body_radius: float) -> bool:
+	for o in obstacles():
+		if p.distance_to(o["center"]) < o["radius"] + body_radius:
+			return true
+	return false
+
+
+## Resolves a desired move out of the obstacles: given the step from `from` to `to`, pushes `to`
+## back to the surface of any obstacle it would enter, keeping the tangential slide along it. A few
+## passes settle the overlapping circles of a wall and its corners. Pure and deterministic — the
+## same math the server and a predicting client both run, so reconciliation lands exactly. `to` is
+## assumed already inside the map bounds.
+static func slide(from: Vector2, to: Vector2, body_radius: float) -> Vector2:
+	var pos := to
+	for _pass in 4:
+		var moved := false
+		for o in obstacles():
+			var center: Vector2 = o["center"]
+			var min_dist: float = o["radius"] + body_radius
+			var offset := pos - center
+			var dist := offset.length()
+			if dist >= min_dist:
+				continue
+			if dist > 0.0001:
+				pos = center + offset / dist * min_dist  # out to the surface, keeping the slide
+			else:
+				var away := (from - center)
+				away = away.normalized() if away.length() > 0.0001 else Vector2.RIGHT
+				pos = center + away * min_dist
+			moved = true
+		if not moved:
+			break
+	return pos
+
+
+## The shortest distance from `p` to any of the map's structures (towers and nexuses) — the
+## clearance the wall generator keeps so a rock never swallows a building.
+static func _dist_to_structures(p: Vector2) -> float:
+	var best := INF
+	for team in NEXUS_POSITIONS.size():
+		for slot in tower_positions(team):
+			best = minf(best, p.distance_to(slot))
+		best = minf(best, p.distance_to(nexus_for_team(team)))
+	return best
+
+
+## The shortest distance from `p` to either team's base fountain — the clearance the walls keep so
+## no rock ever boxes a team in at spawn.
+static func _dist_to_spawns(p: Vector2) -> float:
+	var best := INF
+	for team in NEXUS_POSITIONS.size():
+		best = minf(best, p.distance_to(spawn_for_team(team)))
+	return best
+
+
+## The shortest distance from `p` to any lane corridor — the clearance the camp pockets keep so a
+## pocket rock never lands on a travelled lane.
+static func _dist_to_lanes(p: Vector2) -> float:
+	var best := INF
+	for lane in LANES:
+		best = minf(best, _dist_to_polyline(p, lane))
+	return best
+
+
+## The shortest distance from `p` to a polyline (a lane or the river), as the minimum over its
+## segments. A point-to-segment distance, projected and clamped to each segment.
+static func _dist_to_polyline(p: Vector2, poly: Array) -> float:
+	var best := INF
+	for i in poly.size() - 1:
+		best = minf(best, _dist_to_segment(p, poly[i], poly[i + 1]))
+	return best
+
+
+static func _dist_to_segment(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var len_sq := ab.length_squared()
+	if len_sq < 0.0001:
+		return p.distance_to(a)
+	var t := clampf((p - a).dot(ab) / len_sq, 0.0, 1.0)
+	return p.distance_to(a + ab * t)

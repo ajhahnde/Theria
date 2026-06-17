@@ -170,3 +170,48 @@ func test_each_team_holds_four_towers() -> void:
 	# Two towers ring the nexus and two stand forward down the lanes — four a side, mirrored.
 	assert_eq(MapData.tower_positions(0).size(), 4, "each team fields four towers")
 	assert_eq(MapData.tower_positions(1).size(), 4, "both teams field the same count")
+
+
+# --- collision obstacles ---------------------------------------------------------------------
+
+
+func test_obstacles_are_mirror_symmetric() -> void:
+	var obs := MapData.obstacles()
+	assert_gt(obs.size(), 0, "the map has collision obstacles")
+	for o in obs:
+		var mirrored: Vector2 = MapData.mirror(o["center"])
+		var found := false
+		for q in obs:
+			if q["center"].distance_to(mirrored) < 0.01 and absf(q["radius"] - o["radius"]) < 0.01:
+				found = true
+				break
+		assert_true(found, "every obstacle has its y = x mirror in the set — collision is team-fair")
+
+
+func test_spawns_and_camp_centres_are_walkable() -> void:
+	for team in MapData.NEXUS_POSITIONS.size():
+		assert_false(
+			MapData.point_blocked(MapData.spawn_for_team(team), SimCore.UNIT_RADIUS),
+			"a team spawns on free ground, never walled in",
+		)
+	for camp in MapData.JUNGLE_CAMPS:
+		assert_false(
+			MapData.point_blocked(camp, SimCore.UNIT_RADIUS),
+			"a camp's interior stays clear of its own pocket rocks",
+		)
+
+
+func test_slide_pushes_a_unit_out_of_an_obstacle_and_leaves_free_ground_alone() -> void:
+	var obs := MapData.obstacles()
+	var center: Vector2 = obs[0]["center"]
+	var radius: float = obs[0]["radius"]
+	# Driven straight at the obstacle's centre, the unit is stopped outside it.
+	var from := center + Vector2(radius + 500.0, 0.0)
+	var resolved := MapData.slide(from, center, SimCore.UNIT_RADIUS)
+	assert_gt(resolved.distance_to(center), radius, "slide keeps a unit out of the obstacle it enters")
+	# A move that ends on open ground (the map centre is clear) is returned untouched.
+	assert_eq(
+		MapData.slide(Vector2.ZERO, Vector2(5.0, 0.0), SimCore.UNIT_RADIUS),
+		Vector2(5.0, 0.0),
+		"slide leaves a clear destination unchanged",
+	)
