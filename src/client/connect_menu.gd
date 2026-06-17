@@ -69,6 +69,14 @@ var _difficulty_picker: OptionButton
 ## The Settings dialog, built on first open. Carries the update-channel toggle today;
 ## video/audio options join it as they land.
 var _settings_dialog: AcceptDialog
+## The network updater, created lazily on the first manual "Check now" so a player who never
+## opens Settings never spins up an HTTPRequest. The boot scene runs its own at launch; this one
+## drives the in-menu force-check that bypasses the launch-time throttle.
+var _updater: Updater
+## The Settings dialog's update-status line, written by the manual check as it runs.
+var _check_status: Label
+## The manual-check button, disabled while a check is in flight so it cannot be re-entered.
+var _check_button: Button
 
 
 func _ready() -> void:
@@ -195,7 +203,13 @@ func _footer() -> Control:
 func _build_id() -> String:
 	var sha := UpdateManifest.local_sha()
 	var build := sha.substr(0, 7) if not sha.is_empty() else "seed"
-	var parts := PackedStringArray(["v%s" % UpdateManifest.client_version(), "build %s" % build])
+	# Name the version of the *content* the player is running — the installed pck's version, written
+	# by the updater on swap — not the launcher's baked `config/version`, which is frozen at the build
+	# they first downloaded and so reads as "never updates" even after the pck has marched several
+	# versions on. Falls back to the launcher version when running the bundled seed (no payload yet).
+	var content_version := UpdateManifest.payload_version()
+	var version := content_version if not content_version.is_empty() else UpdateManifest.client_version()
+	var parts := PackedStringArray(["v%s" % version, "build %s" % build])
 	var status := str(Engine.get_meta(UiTheme.STATUS_META, ""))
 	if not status.is_empty():
 		parts.append(status)
@@ -248,6 +262,21 @@ func _build_settings_dialog() -> AcceptDialog:
 	hint.custom_minimum_size = Vector2(ADDRESS_MIN_WIDTH, 0)
 	box.add_child(hint)
 
+	# A force-check that bypasses the launch-time throttle, so a player who hears a new build is out
+	# can pull it now instead of waiting out the cold-start window. Its result lands in the status
+	# line below rather than in a hand-off, since the menu stays up.
+	_check_button = Button.new()
+	_check_button.text = "Check for updates now"
+	_check_button.pressed.connect(_on_check_now_pressed)
+	box.add_child(_check_button)
+
+	_check_status = Label.new()
+	_check_status.add_theme_color_override("font_color", UiTheme.TEXT_MUTED)
+	_check_status.add_theme_font_size_override("font_size", FOOTER_FONT_SIZE)
+	_check_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_check_status.custom_minimum_size = Vector2(ADDRESS_MIN_WIDTH, 0)
+	box.add_child(_check_status)
+
 	dialog.add_child(box)
 	return dialog
 
@@ -256,6 +285,71 @@ func _build_settings_dialog() -> AcceptDialog:
 ## by the selected item is written verbatim; the boot scene reads it on the next launch.
 func _on_channel_selected(index: int, picker: OptionButton) -> void:
 	Settings.set_update_channel(picker.get_item_metadata(index))
+
+
+## Runs a manual update check that bypasses the launch-time throttle, so a player who just heard a
+## new build is out can pull it without relaunching. Creates the updater on first use and points it
+## at the saved channel each time (the picker may have just changed it). The downloaded pck is loaded
+## only at the next launch — `load_resource_pack` runs in the boot scene — so a successful apply asks
+## for a restart rather than swapping the running game out from under the player.
+func _on_check_now_pressed() -> void:
+	if _updater == null:
+		_updater = Updater.new()
+		add_child(_updater)
+		_updater.check_done.connect(_on_check_now_done)
+		_updater.download_progress.connect(_on_check_now_progress)
+		_updater.applied.connect(_on_check_now_applied)
+	_updater.channel = Settings.update_channel()
+	_check_button.disabled = true
+	_check_status.text = "Checking…"
+	_updater.check()
+
+
+## The manual check finished: the boot screen's branches — offline, a client too old for the build,
+## a newer build (download it), or already current — but staying on the menu instead of handing off,
+## and re-enabling the button on every terminal branch.
+func _on_check_now_done(available: bool, info: Dictionary) -> void:
+	if info.get("offline", false):
+		_finish_check("Offline — check your connection")
+		return
+	if info.get("needs_client_upgrade", false):
+		_finish_check("A new Theria is out — please re-download the client")
+		return
+	if available:
+		_check_status.text = "Downloading %s…" % _check_label(info)
+		_updater.apply(info)
+		return
+	_finish_check("Up to date")
+
+
+## Mirrors the download fraction into the status line while a manual-check pck is being fetched.
+func _on_check_now_progress(ratio: float) -> void:
+	_check_status.text = "Downloading… %d%%" % int(ratio * 100.0)
+
+
+## A manual-check apply finished. On success the new pck is staged live, but the running client still
+## holds the one it booted with (the pck loads at boot, not mid-session), so ask for a restart; on
+## failure the install was left untouched.
+func _on_check_now_applied(ok: bool) -> void:
+	if ok:
+		_finish_check("Updated — restart Theria to apply")
+	else:
+		_finish_check("Update failed — try again")
+
+
+## Single exit for every manual-check branch: shows the message and re-enables the button.
+func _finish_check(message: String) -> void:
+	_check_status.text = message
+	_check_button.disabled = false
+
+
+## A human label for the build a manual check is installing: its version when the manifest carried
+## one, else a short sha — the same fallback the boot screen uses.
+func _check_label(info: Dictionary) -> String:
+	var version: String = info.get("version", "")
+	if not version.is_empty():
+		return version
+	return (info.get("sha", "") as String).substr(0, 7)
 
 
 ## Fills the hero picker from the tribe rosters — one item per hero, labelled

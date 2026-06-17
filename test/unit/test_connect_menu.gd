@@ -121,3 +121,15 @@ func test_settings_dialog_preselects_the_saved_channel() -> void:
 		Settings.update_channel(),
 		"the channel picker opens on the saved channel"
 	)
+
+
+func test_settings_dialog_offers_a_manual_update_check() -> void:
+	# The Settings dialog carries a force-check button so a player who hears a new build is out can
+	# pull it without waiting out the launch-time throttle.
+	var menu := _menu()
+	var dialog := menu._build_settings_dialog()
+	add_child_autoqfree(dialog)
+	var labels := PackedStringArray()
+	for button in dialog.find_children("", "Button", true, false):
+		labels.append((button as Button).text)
+	assert_has(labels, "Check for updates now", "the Settings dialog offers a manual update check")

@@ -157,15 +157,17 @@ func apply(info: Dictionary) -> void:
 		DirAccess.remove_absolute(UpdateManifest.PCK_NEW_PATH)
 		applied.emit(false)
 		return
-	applied.emit(_swap_in(info.get("sha", "")))
+	applied.emit(_swap_in(info.get("sha", ""), info.get("version", "")))
 
 
 ## Promotes the staged `.new` pck to the live slot: roll the current live pck to
-## `.prev` (for rollback), move `.new` into place, and record the installed sha. The
-## live pck does not exist only for the instant between the two renames; both are
-## within the payload dir (same filesystem) so each is atomic. Returns false on any
-## filesystem error, leaving the staged file behind for the next attempt.
-func _swap_in(sha: String) -> bool:
+## `.prev` (for rollback), move `.new` into place, and record the installed sha (the
+## comparison key) plus its human version (for the footer). The live pck does not exist
+## only for the instant between the two renames; both are within the payload dir (same
+## filesystem) so each is atomic. Returns false on any filesystem error, leaving the
+## staged file behind for the next attempt. The sha write gates the result — it is the
+## newer-than-installed key; the version marker is cosmetic, written best-effort after.
+func _swap_in(sha: String, version: String) -> bool:
 	if FileAccess.file_exists(UpdateManifest.PCK_PATH):
 		DirAccess.remove_absolute(UpdateManifest.PCK_PREV_PATH)
 		if DirAccess.rename_absolute(UpdateManifest.PCK_PATH, UpdateManifest.PCK_PREV_PATH) != OK:
@@ -176,6 +178,9 @@ func _swap_in(sha: String) -> bool:
 	if f == null:
 		return false
 	f.store_string(sha)
+	var vf := FileAccess.open(UpdateManifest.PAYLOAD_VERSION_PATH, FileAccess.WRITE)
+	if vf != null:
+		vf.store_string(version)
 	return true
 
 

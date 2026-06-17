@@ -31,6 +31,12 @@ const PCK_PREV_PATH := PAYLOAD_DIR + "/game.pck.prev"
 ## The git sha of the installed pck, written after a swap; empty/absent before the
 ## first successful update (the client then runs its bundled seed).
 const VERSION_PATH := PAYLOAD_DIR + "/.version"
+## The human version string of the installed pck (the manifest's `version`), written
+## alongside the sha after a swap. Read by the menu footer so it names the *content* the
+## player is running rather than the launcher's frozen `config/version`. Empty/absent
+## before the first update or after a swap that predates this marker (an older install
+## carries only `.version`); the footer then falls back to the launcher version.
+const PAYLOAD_VERSION_PATH := PAYLOAD_DIR + "/.payload_version"
 ## Touched after every successful reach to the channel; its mtime throttles the
 ## cold-start probe (see `Updater.should_check`).
 const LAST_CHECK_PATH := PAYLOAD_DIR + "/.last_check"
@@ -148,6 +154,19 @@ static func local_sha() -> String:
 	if not FileAccess.file_exists(VERSION_PATH):
 		return ""
 	var f := FileAccess.open(VERSION_PATH, FileAccess.READ)
+	if f == null:
+		return ""
+	return f.get_as_text().strip_edges()
+
+
+## The human version string of the installed pck (the manifest's `version`), read from
+## `.payload_version`, or empty when nothing has been installed yet or the install predates
+## this marker. Best-effort, like `local_sha`: any read failure reads as "unknown", which
+## the footer treats as a cue to show the launcher's own version instead.
+static func payload_version() -> String:
+	if not FileAccess.file_exists(PAYLOAD_VERSION_PATH):
+		return ""
+	var f := FileAccess.open(PAYLOAD_VERSION_PATH, FileAccess.READ)
 	if f == null:
 		return ""
 	return f.get_as_text().strip_edges()

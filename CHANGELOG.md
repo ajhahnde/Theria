@@ -25,6 +25,20 @@ protocol version.
 
 ## [Unreleased]
 
+### Added
+
+- **"Check for updates now" in Settings** — a force-check that bypasses the once-a-day launch
+  throttle, so a player who hears a new build is out can pull it without relaunching. It reports
+  inline (Checking… → download progress → Up to date / Updated — restart to apply), and asks for a
+  restart on success, since the new payload loads at the next launch.
+
+### Fixed
+
+- **Menu footer now names the version you are actually running** — it showed the launcher's frozen
+  build number (the version of the installer you first downloaded), so the client read as "stuck on
+  an old version" even after the auto-updater had marched the content several releases on. The footer
+  now reads the installed payload's version, written by the updater on each swap.
+
 ## [v0.4.2] — 2026-06-17
 
 ### Changed
