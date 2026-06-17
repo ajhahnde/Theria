@@ -97,8 +97,12 @@ func close() -> void:
 ## Broadcasts the authoritative world to every client. Called once per tick by the
 ## host driver, after the simulation has stepped. `ack` is the sequence number of
 ## the remote input applied this tick, so the client can reconcile against it.
-func broadcast_snapshot(state: SimState, ack: int = -1) -> void:
-	_push_snapshot.rpc(NetProtocol.encode_snapshot(state, ack))
+## `visible_ids` is the receiving team's fog-of-war filter (see NetProtocol.encode_snapshot):
+## when non-empty, only the entities that team can see are sent, so an enemy in fog never crosses
+## the wire. The walking skeleton seats a single client (team 1), so the host passes that team's
+## visible set; an empty filter sends the whole world.
+func broadcast_snapshot(state: SimState, ack: int = -1, visible_ids: Dictionary = {}) -> void:
+	_push_snapshot.rpc(NetProtocol.encode_snapshot(state, ack, visible_ids))
 
 
 ## The last input received from `peer_id`, or null if none has arrived yet.

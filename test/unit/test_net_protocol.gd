@@ -106,6 +106,30 @@ func test_snapshot_preserves_entity_order() -> void:
 	assert_eq(restored.entities.keys(), state.entities.keys())
 
 
+func test_a_visibility_filter_encodes_only_the_listed_entities() -> void:
+	# Fog of war: the server filters each client's snapshot to the entities that team can see, so an
+	# enemy in fog never crosses the wire. A non-empty filter writes only its ids; the rest vanish.
+	var state := _populated_state()
+	var kept := state.entities.keys().slice(0, 2)
+	var visible := {}
+	for id in kept:
+		visible[id] = true
+	var restored := NetProtocol.decode_snapshot(NetProtocol.encode_snapshot(state, -1, visible))
+	assert_eq(restored.entities.size(), 2, "only the visible entities are encoded")
+	assert_eq(restored.entities.keys(), kept, "the kept ids survive, in order")
+	for id in state.entities:
+		if not visible.has(id):
+			assert_null(restored.get_entity(id), "an entity in fog is absent from the snapshot")
+
+
+func test_an_empty_visibility_filter_encodes_the_whole_world() -> void:
+	# The default (no fog filter) must stay the pre-fog behaviour: every entity is sent, so an
+	# unfiltered server and the round-trip tests are unaffected.
+	var state := _populated_state()
+	var restored := NetProtocol.decode_snapshot(NetProtocol.encode_snapshot(state, -1, {}))
+	assert_eq(restored.entities.size(), state.entities.size(), "an empty filter sends the full world")
+
+
 func test_snapshot_carries_the_winner() -> void:
 	var state := SimState.new()
 	state.winner = 1

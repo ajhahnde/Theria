@@ -48,6 +48,12 @@ protocol version.
   walking it into a wall, threading the gank gaps and rounding the towers — and the bots approach
   through the same routing. Pathing runs on a deterministic grid in the simulation, so an online
   hero's predicted route still reconciles exactly with the server and a bot match replays identically.
+- **Fog of war**: a team now sees only what its own units light up. Each hero, creep, and structure
+  reveals a radius around itself; the rest of the map sits under fog and the enemies in it are
+  hidden — they appear the moment they step into your team's vision and vanish when they leave. The
+  reveal is **authoritative**: an unseen enemy is never sent to a player's client, so it cannot be
+  read off the wire. *(First pass: vision is a plain radius — walls do not yet block line of sight —
+  and there is no remembered "last seen" terrain; both are follow-up slices.)*
 
 ## [v0.3.4] — 2026-06-16
 

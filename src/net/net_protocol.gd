@@ -49,22 +49,35 @@ static func decode_input(data: Array) -> InputCommand:
 	return command
 
 
-## Encodes the full authoritative world into a snapshot byte record: an 11-byte
+## Encodes the authoritative world into a snapshot byte record: an 11-byte
 ## header — tick (u32), `ack` (i32), winner (i8), entity count (u16) — followed by one
-## fixed entity record per entity in insertion order. `ack` is the last client input
+## fixed entity record per encoded entity in insertion order. `ack` is the last client input
 ## sequence the server has applied (`-1` when none); the client reads it to prune and
 ## replay its pending inputs, and `decode_snapshot` ignores it (a transport marker, not
 ## world state) — `decode_snapshot_ack` reads it alone, straight from the header,
 ## without decoding the entities. Insertion order is preserved so the decoded world
 ## iterates identically to the server's — deterministic rendering. Packing the world
 ## this tight keeps a full creep wave inside one unreliable datagram.
-static func encode_snapshot(state: SimState, ack: int = -1) -> PackedByteArray:
+##
+## `visible_ids` is the fog-of-war filter: when non-empty, only entities whose id is in it are
+## written (and the count reflects that), so an enemy a team cannot see never crosses the wire —
+## the fog is authoritative, not a client dim. Empty (the default) writes the whole world, the
+## pre-fog behaviour every other caller and the round-trip tests rely on. The wire shape is
+## unchanged — a filtered snapshot is just a smaller entity count — so PROTOCOL_VERSION is not
+## affected: a filtered server and an unfiltered one differ only in how many rows they send.
+static func encode_snapshot(
+	state: SimState, ack: int = -1, visible_ids: Dictionary = {}
+) -> PackedByteArray:
+	var ids: Array = []
+	for id in state.entities:
+		if visible_ids.is_empty() or visible_ids.has(id):
+			ids.append(id)
 	var buf := StreamPeerBuffer.new()
 	buf.put_u32(state.tick)
 	buf.put_32(ack)
 	buf.put_8(state.winner)
-	buf.put_u16(state.entities.size())
-	for id in state.entities:
+	buf.put_u16(ids.size())
+	for id in ids:
 		_encode_entity(buf, state.entities[id])
 	return buf.data_array
 

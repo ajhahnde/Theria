@@ -205,6 +205,9 @@ var _views: Dictionary = {}
 ## screen — built and driven as one layer by `MatchOverlays`, reconciled each tick in
 ## `_sync_world`. Null on a headless run (no display to draw it on).
 var _overlays: MatchOverlays = null
+## The fog-of-war sheet over the playfield, fed the player team's reveal circles each tick in
+## `_sync_world`. Null on a headless run (no display to draw it on).
+var _fog: FogOverlay = null
 
 
 func _ready() -> void:
@@ -478,7 +481,9 @@ func _tick_host() -> void:
 	else:
 		team1_command = _bot.decide(_sim.state, _bot_id)
 	_sim.step({_hero_id: _sample_player_input(), _bot_id: team1_command})
-	_net.broadcast_snapshot(_sim.state, ack)
+	# Fog of war: the client only ever receives what its team (the remote team) can see, so an
+	# enemy in fog never crosses the wire — the filter is authoritative, not a render dim.
+	_net.broadcast_snapshot(_sim.state, ack, Vision.visible_ids(_sim.state, NetSession.REMOTE_TEAM))
 
 
 ## Samples local input, sends it up stamped with a sequence number, buffers it as pending,
@@ -652,6 +657,7 @@ func _build_world() -> void:
 	if not _is_headless():
 		_overlays = MatchOverlays.new()
 		add_child(_overlays)
+		_fog = FogOverlay.build(self)
 
 
 ## Reconciles the view pool against the live state, then trails the camera. Called each
@@ -670,6 +676,10 @@ func _sync_world() -> void:
 		if not state.entities.has(id):
 			(_views[id]["root"] as Node3D).queue_free()
 			_views.erase(id)
+	if _fog != null:
+		# Fog of war: dim the unseen ground and hide enemies in it. A pure CLIENT's snapshot is
+		# already filtered to its team, so only a local-authority world needs the enemy-hiding pass.
+		_fog.apply(state, _player_team(), _views, _mode != Mode.CLIENT)
 	for event in state.fx_events:
 		MatchFx.play(self, event)
 	for attack in state.attack_events:
