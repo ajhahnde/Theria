@@ -162,6 +162,11 @@ const CAMP_FEATURE_CLEAR := 200.0  # no pocket rock on a lane or in the river
 ## reused by the per-tick collision, the nav grid, and the tests.
 static var _obstacles: Array = []
 
+## Lazily-built cache of the sight-blocking circles (the jungle walls only) — baked once and reused
+## by the per-team vision pass. Separate from `_obstacles` because vision and collision block on
+## different sets: a tower stops a body but not a sight line.
+static var _vision_blockers: Array = []
+
 
 ## Reflection across the diagonal axis y = x — the map's mirror. An involution (its own inverse)
 ## that swaps the two bases, so team 1's geometry is team 0's mirrored.
@@ -263,6 +268,18 @@ static func _build_obstacles() -> Array:
 	for p in jungle_wall_points():
 		out.append({"center": p, "radius": WALL_RADIUS})
 	return out
+
+
+## The sight-blocking geometry for fog of war: the jungle rock walls and camp pockets only — a
+## tower or the nexus blocks a body but never a sight line, so the structures are deliberately left
+## out (you can see past your own buildings, as in the genre). Each a `{center, radius}` circle, the
+## same wall footprints `obstacles` uses, mirrored across the axis so vision is team-fair, and baked
+## once (the map is static). Read by Vision for line-of-sight occlusion; callers treat it read-only.
+static func vision_blockers() -> Array:
+	if _vision_blockers.is_empty():
+		for p in jungle_wall_points():
+			_vision_blockers.append({"center": p, "radius": WALL_RADIUS})
+	return _vision_blockers
 
 
 ## The rock centres of the jungle walls and camp pockets — the blocker layout, shared by the sim

@@ -52,8 +52,12 @@ protocol version.
   reveals a radius around itself; the rest of the map sits under fog and the enemies in it are
   hidden — they appear the moment they step into your team's vision and vanish when they leave. The
   reveal is **authoritative**: an unseen enemy is never sent to a player's client, so it cannot be
-  read off the wire. *(First pass: vision is a plain radius — walls do not yet block line of sight —
-  and there is no remembered "last seen" terrain; both are follow-up slices.)*
+  read off the wire.
+- **Vision blocked by walls**: the jungle rock walls now block line of sight — an enemy behind a wall
+  stays hidden even within your sight range, so a wall is real cover to gank from. Towers and the
+  nexus do not block sight (only terrain does). *(The fog overlay still lights a plain circle — the
+  shadow a wall casts into your vision is a visual follow-up; there is also no remembered "last seen"
+  terrain yet.)*
 - A **minimap** in the bottom-right corner: a scaled plan of the arena with the lanes and river as a
   backdrop and live dots for every unit — your team always, enemies only where your team has vision,
   so it respects the same fog of war as the main view. Your own hero is ringed so it is easy to find.

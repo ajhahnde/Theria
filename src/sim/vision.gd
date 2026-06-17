@@ -54,7 +54,8 @@ static func sight_sources(state: SimState, team: int) -> Array:
 
 ## The ids `team` can see, as an id->true set for O(1) membership: every own-team entity always
 ## (you never lose sight of your own units, even a downed hero on the respawn clock), plus any
-## entity whose centre lies within the radius of one of the team's sight sources. Pure and
+## entity that lies within the radius of one of the team's sight sources **and** has a clear sight
+## line to it — a wall between the source and the unit hides it even in range (real ganks). Pure and
 ## insertion-ordered, so the server filters every client's snapshot deterministically.
 static func visible_ids(state: SimState, team: int) -> Dictionary:
 	var sources := sight_sources(state, team)
@@ -65,7 +66,32 @@ static func visible_ids(state: SimState, team: int) -> Dictionary:
 			visible[id] = true
 			continue
 		for source in sources:
-			if entity.position.distance_to(source["center"]) <= source["radius"]:
+			var in_range: bool = entity.position.distance_to(source["center"]) <= source["radius"]
+			if in_range and _los_clear(source["center"], entity.position):
 				visible[id] = true
 				break
 	return visible
+
+
+## Whether the straight sight line from `a` to `b` is clear of every vision blocker — the ray a
+## sight source casts to a unit. Blocked when the segment passes within a blocker's radius of its
+## centre (the ray crosses the rock). Walls only block sight (MapData.vision_blockers); structures
+## do not. The same segment-vs-circle math the collision uses, so a wall that stops a body stops a
+## sight line too.
+static func _los_clear(a: Vector2, b: Vector2) -> bool:
+	for blocker in MapData.vision_blockers():
+		if _point_to_segment_sq(blocker["center"], a, b) < blocker["radius"] * blocker["radius"]:
+			return false
+	return true
+
+
+## The squared distance from point `p` to the segment `a`–`b`. Squared to keep the per-blocker LOS
+## test free of a square root — the radius is squared at the call site to compare. Projects `p` onto
+## the segment, clamped to the endpoints.
+static func _point_to_segment_sq(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var len_sq := ab.length_squared()
+	if len_sq < 0.0001:
+		return p.distance_squared_to(a)
+	var t := clampf((p - a).dot(ab) / len_sq, 0.0, 1.0)
+	return p.distance_squared_to(a + ab * t)

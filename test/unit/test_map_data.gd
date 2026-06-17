@@ -188,6 +188,29 @@ func test_obstacles_are_mirror_symmetric() -> void:
 		assert_true(found, "every obstacle has its y = x mirror in the set — collision is team-fair")
 
 
+func test_vision_blockers_are_the_walls_only_and_mirror_symmetric() -> void:
+	# Sight is blocked by terrain, not buildings: the vision blockers are the jungle walls — every
+	# one a WALL_RADIUS circle on a wall point — and never a tower or the nexus.
+	var blockers := MapData.vision_blockers()
+	assert_eq(blockers.size(), MapData.jungle_wall_points().size(), "one sight blocker per wall point")
+	for b in blockers:
+		assert_eq(b["radius"], MapData.WALL_RADIUS, "a sight blocker is a wall-footprint circle")
+	for team in MapData.NEXUS_POSITIONS.size():
+		var structures := PackedVector2Array(MapData.tower_positions(team))
+		structures.append(MapData.nexus_for_team(team))
+		for s in structures:
+			for b in blockers:
+				assert_gt(b["center"].distance_to(s), 1.0, "a structure is not a sight blocker")
+	for b in blockers:
+		var mirrored: Vector2 = MapData.mirror(b["center"])
+		var found := false
+		for q in blockers:
+			if q["center"].distance_to(mirrored) < 0.01:
+				found = true
+				break
+		assert_true(found, "every sight blocker has its y = x mirror — vision is team-fair")
+
+
 func test_spawns_and_camp_centres_are_walkable() -> void:
 	for team in MapData.NEXUS_POSITIONS.size():
 		assert_false(

@@ -71,6 +71,43 @@ func test_sight_sources_lists_living_friendly_units_only() -> void:
 	assert_eq(sources[0]["radius"], Vision.HERO_SIGHT, "a hero's source carries the sight radius")
 
 
+func test_a_wall_on_the_sight_line_hides_an_enemy_in_range() -> void:
+	# Locate a real sight blocker and straddle it: a friendly source one side, the enemy the other,
+	# close enough to be in range — the wall sitting between them must hide the enemy (the gank).
+	var blockers := MapData.vision_blockers()
+	assert_gt(blockers.size(), 0, "the map has sight-blocking walls")
+	var wall: Dictionary = blockers[0]
+	var center: Vector2 = wall["center"]
+	var radius: float = wall["radius"]
+	var sim := _world()
+	sim.add_hero(0, center - Vector2.RIGHT * (radius + 30.0), 320.0)
+	var enemy := sim.add_entity(1, center + Vector2.RIGHT * (radius + 30.0), 320.0, 100)
+	assert_false(Vision.visible_ids(sim.state, 0).has(enemy), "a wall on the sight line hides it")
+
+
+func test_a_clear_sight_line_sees_an_enemy_in_range() -> void:
+	# Near a base fountain the walls keep their distance (WALL_SPAWN_CLEAR), so the sight line is
+	# open — an in-range enemy with no wall between is seen, the counterpart to the occlusion above.
+	var sim := _world()
+	var base := MapData.spawn_for_team(0)
+	sim.add_hero(0, base, 320.0)
+	var enemy := sim.add_entity(1, base - base.normalized() * 150.0, 320.0, 100)
+	assert_true(Vision.visible_ids(sim.state, 0).has(enemy), "a clear in-range enemy is seen")
+
+
+func test_visible_ids_stays_cheap_over_a_heavy_world() -> void:
+	# A slideshow tripwire, not a microbenchmark: the LOS occlusion scans the wall set, and the pass
+	# runs a few times per tick (snapshot filter + render hide + minimap), so a full world must
+	# resolve well inside the tick budget. The auto-pathing slice taught this lesson the hard way.
+	var sim := _heavy_world()
+	var start := Time.get_ticks_usec()
+	for _i in 200:
+		Vision.visible_ids(sim.state, 0)
+	var per_call_us := float(Time.get_ticks_usec() - start) / 200.0
+	print("visible_ids per call over a heavy world: %.1f us" % per_call_us)
+	assert_lt(per_call_us, 2000.0, "visible_ids over a heavy world stays well under 2 ms/call")
+
+
 func test_vision_is_team_fair_under_the_map_mirror() -> void:
 	# The same encounter mirrored across the y = x axis and with the teams swapped must resolve the
 	# same way — neither team sees farther, so fog never favours a side.
@@ -90,3 +127,15 @@ func test_vision_is_team_fair_under_the_map_mirror() -> void:
 		Vision.visible_ids(b.state, 1).has(enemy_b),
 		"the mirrored encounter resolves identically for the swapped team",
 	)
+
+
+## A full mid-match world for the perf guard: both teams' structures, three heroes a side, and the
+## opening creep waves on every lane (the first wave spawns on tick 0, so one step seeds it).
+func _heavy_world() -> SimCore:
+	var sim := SimCore.new()
+	sim.spawn_structures()
+	for team in 2:
+		for i in 3:
+			sim.add_hero(team, MapData.squad_spawn(team, i, 3), 320.0)
+	sim.step({})
+	return sim
