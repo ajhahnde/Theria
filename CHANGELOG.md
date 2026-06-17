@@ -25,6 +25,8 @@ protocol version.
 
 ## [Unreleased]
 
+## [v0.4.0] — 2026-06-17
+
 ### Added
 
 - A **map-objects pass** dressing the arena into a jungle: a faceted **mountain wall** ringing the
